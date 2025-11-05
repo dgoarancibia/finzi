@@ -2409,12 +2409,6 @@ window.currentUser = null;
  */
 window.initializeFirebase = async function() {
     try {
-        // Si ya está inicializado, retornar
-        if (window.firebaseApp && window.firebaseAuth && window.firestore) {
-            console.log('✅ Firebase ya está inicializado');
-            return true;
-        }
-
         console.log('🔥 Inicializando Firebase...');
 
         // Verificar que Firebase esté cargado
@@ -2427,46 +2421,46 @@ window.initializeFirebase = async function() {
             throw new Error('Configuración de Firebase no encontrada. Edita src/utils/firebase-config.js');
         }
 
-        // Inicializar App (verificar si ya existe)
-        if (!window.firebaseApp) {
-            // Verificar si ya existe una instancia de Firebase
-            if (firebase.apps.length > 0) {
-                window.firebaseApp = firebase.apps[0];
-                console.log('✅ Usando instancia existente de Firebase App');
-            } else {
-                window.firebaseApp = firebase.initializeApp(window.FIREBASE_CONFIG);
-                console.log('✅ Firebase App inicializada');
-            }
-        }
+        // Inicializar App
+        window.firebaseApp = firebase.initializeApp(window.FIREBASE_CONFIG);
+        console.log('✅ Firebase App inicializada');
 
-        // Inicializar Auth
-        if (!window.firebaseAuth) {
-            window.firebaseAuth = firebase.auth();
-            console.log('✅ Firebase Auth inicializada');
+        // Inicializar Auth con persistencia LOCAL (más compatible con móviles)
+        window.firebaseAuth = firebase.auth();
+
+        // Configurar persistencia LOCAL para compatibilidad móvil
+        try {
+            await window.firebaseAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+            console.log('✅ Firebase Auth inicializada con persistencia LOCAL');
+        } catch (err) {
+            console.warn('⚠️ No se pudo configurar persistencia, usando por defecto:', err);
         }
 
         // Inicializar Firestore
-        if (!window.firestore) {
-            window.firestore = firebase.firestore();
+        window.firestore = firebase.firestore();
 
-            // Habilitar persistencia offline (ANTES de cualquier operación)
-            if (window.FIRESTORE_SETTINGS.enablePersistence) {
-                try {
-                    await window.firestore.enablePersistence({
-                        synchronizeTabs: true
-                    });
-                    console.log('✅ Persistencia offline habilitada');
-                } catch (err) {
-                    if (err.code === 'failed-precondition') {
-                        console.warn('⚠️ Persistencia: múltiples pestañas abiertas');
-                    } else if (err.code === 'unimplemented') {
-                        console.warn('⚠️ Persistencia no soportada en este navegador');
-                    }
+        // Habilitar persistencia offline
+        if (window.FIRESTORE_SETTINGS.enablePersistence) {
+            try {
+                await window.firestore.enablePersistence({
+                    synchronizeTabs: true
+                });
+                console.log('✅ Persistencia offline habilitada');
+            } catch (err) {
+                if (err.code === 'failed-precondition') {
+                    console.warn('⚠️ Persistencia: múltiples pestañas abiertas');
+                } else if (err.code === 'unimplemented') {
+                    console.warn('⚠️ Persistencia no soportada en este navegador');
                 }
             }
-
-            console.log('✅ Firestore inicializada');
         }
+
+        // Configurar settings
+        window.firestore.settings({
+            cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
+        });
+
+        console.log('✅ Firestore inicializada');
 
         // Observer de autenticación
         window.firebaseAuth.onAuthStateChanged((user) => {
@@ -3710,7 +3704,7 @@ const Login = () => {
                         <div className="inline-block">
                             <svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-900 dark:text-white mx-auto">
                                 <defs>
-                                    <linearGradient id="arrow-gradient-login" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnUse">
+                                    <linearGradient id="arrow-gradient-login" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnBox">
                                         <stop offset="0%" style={{stopColor: '#7DD3C0', stopOpacity: 1}} />
                                         <stop offset="50%" style={{stopColor: '#A8E063', stopOpacity: 1}} />
                                         <stop offset="100%" style={{stopColor: '#56AB2F', stopOpacity: 1}} />
@@ -3814,7 +3808,7 @@ const Sidebar = () => {
     const LogoFinzi = ({ className = "" }) => (
         <svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
             <defs>
-                <linearGradient id="arrow-gradient" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnUse">
+                <linearGradient id="arrow-gradient" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnBox">
                     <stop offset="0%" style={{stopColor: '#7DD3C0', stopOpacity: 1}} />
                     <stop offset="50%" style={{stopColor: '#A8E063', stopOpacity: 1}} />
                     <stop offset="100%" style={{stopColor: '#56AB2F', stopOpacity: 1}} />
@@ -3830,7 +3824,7 @@ const Sidebar = () => {
     const LogoFinziCompact = ({ className = "" }) => (
         <svg width="40" height="40" viewBox="0 0 60 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
             <defs>
-                <linearGradient id="arrow-gradient-compact" x1="10" y1="8" x2="30" y2="32" gradientUnits="userSpaceOnUse">
+                <linearGradient id="arrow-gradient-compact" x1="10" y1="8" x2="30" y2="32" gradientUnits="userSpaceOnBox">
                     <stop offset="0%" style={{stopColor: '#7DD3C0', stopOpacity: 1}} />
                     <stop offset="50%" style={{stopColor: '#A8E063', stopOpacity: 1}} />
                     <stop offset="100%" style={{stopColor: '#56AB2F', stopOpacity: 1}} />
@@ -10263,7 +10257,6 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
             // FIREBASE: Inicializar Firebase
             useEffect(() => {
                 const initFirebase = async () => {
-                    console.log('🔍 USE_FIREBASE:', window.USE_FIREBASE);
                     if (window.USE_FIREBASE) {
                         try {
                             await window.initializeFirebase();
@@ -10276,7 +10269,6 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
                             setFirebaseReady(true);
                         }
                     } else {
-                        console.log('⚠️ Firebase deshabilitado, usando IndexedDB');
                         setFirebaseReady(true);
                     }
                 };
@@ -10307,21 +10299,16 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
 
             // Inicializar datos al montar
             useEffect(() => {
-                console.log('🔍 Estado:', { USE_FIREBASE: window.USE_FIREBASE, firebaseReady, isAuthenticated, loading });
-
                 // Si usa Firebase, esperar autenticación
                 if (window.USE_FIREBASE) {
                     if (firebaseReady && isAuthenticated) {
-                        console.log('✅ Autenticado, inicializando app...');
                         initializeApp();
                     } else if (firebaseReady && !isAuthenticated) {
                         // No autenticado, mostrar login
-                        console.log('⚠️ No autenticado, mostrando login');
                         setLoading(false);
                     }
                 } else {
                     // No usa Firebase, inicializar directamente
-                    console.log('📦 IndexedDB mode, inicializando app...');
                     initializeApp();
                 }
             }, [firebaseReady, isAuthenticated]);
@@ -10404,7 +10391,6 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
 
             // FIREBASE: Mostrar Login si usa Firebase y no está autenticado
             if (window.USE_FIREBASE && firebaseReady && !isAuthenticated && !loading) {
-                console.log('🚪 Mostrando pantalla de Login');
                 return <Login />;
             }
 

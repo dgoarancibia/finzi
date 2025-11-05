@@ -30,9 +30,16 @@ window.initializeFirebase = async function() {
         window.firebaseApp = firebase.initializeApp(window.FIREBASE_CONFIG);
         console.log('✅ Firebase App inicializada');
 
-        // Inicializar Auth
+        // Inicializar Auth con persistencia LOCAL (más compatible con móviles)
         window.firebaseAuth = firebase.auth();
-        console.log('✅ Firebase Auth inicializada');
+
+        // Configurar persistencia LOCAL para compatibilidad móvil
+        try {
+            await window.firebaseAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+            console.log('✅ Firebase Auth inicializada con persistencia LOCAL');
+        } catch (err) {
+            console.warn('⚠️ No se pudo configurar persistencia, usando por defecto:', err);
+        }
 
         // Inicializar Firestore
         window.firestore = firebase.firestore();
