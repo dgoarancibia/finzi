@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Completo - App Gastos</title>
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f8f9fa;
+            min-height: 100vh;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #666;
+            line-height: 1.6;
+        }
+        .btn {
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3);
+        }
+        .btn-secondary {
+            background: #6366f1;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #4f46e5;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            display: none;
+        }
+        .output.success {
+            background: #d1fae5;
+            color: #065f46;
+            display: block;
+        }
+        .output.error {
+            background: #fee2e2;
+            color: #991b1b;
+            display: block;
+        }
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning strong {
+            color: #92400e;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🗑️ Reset Completo de Base de Datos</h1>
+        <p>Esta herramienta eliminará <strong>TODA</strong> la información almacenada en la aplicación:</p>
+
+        <ul style="color: #666; line-height: 2;">
+            <li>✗ Todos los meses cargados</li>
+            <li>✗ Todas las transacciones</li>
+            <li>✗ Todos los presupuestos personalizados</li>
+            <li>✗ Recurrentes y compras planeadas</li>
+            <li>✓ Perfiles (se mantendrán los por defecto)</li>
+            <li>✓ Categorías (se mantendrán las por defecto)</li>
+        </ul>
+
+        <div class="warning">
+            <strong>⚠️ Advertencia:</strong> Esta acción no se puede deshacer. Todos tus datos se perderán permanentemente.
+        </div>
+
+        <button class="btn btn-danger" onclick="resetearTodo()">
+            🗑️ Eliminar Toda la Data
+        </button>
+
+        <button class="btn btn-secondary" onclick="volverApp()" style="margin-top: 10px;">
+            ← Volver a la Aplicación
+        </button>
+
+        <div id="output" class="output"></div>
+    </div>
+
+    <script>
+        // Inicializar Dexie con la versión correcta
+        const db = new Dexie('GastosTCDatabase');
+        db.version(9).stores({
+            mesesCarga: '++id, mesAnio, fechaCarga',
+            transacciones: '++id, mesAnioId, perfilId, fecha, categoria, comercio, esCompartido, esReembolsable, reembolsoId',
+            presupuestos: '++id, mesAnioId, categoria, monto, esPlantilla',
+            recurrentes: '++id, nombre, categoria, perfilId, montoEstimado, activa, ultimoMes',
+            historialRecurrentes: '++id, recurrenteId, mesAnio, monto, fecha',
+            comprasPlaneadas: '++id, nombre, monto, cuotas, categoria, perfilId, fechaCreacion',
+            liquidaciones: '++id, mesAnioId, mesAnio, deudorId, acreedorId, monto, fecha, gastosIncluidos',
+            ingresos: '++id, mesAnio, perfilId, monto, descripcion, fecha, esRecurrente',
+            reembolsos: '++id, transaccionOrigenId, nombreDeudor, estado, tipoCompra, cuotasTotal, fechaCreacion, fechaSolicitud, fechaPago'
+        });
+
+        async function resetearTodo() {
+            const confirmacion = confirm('¿Estás SEGURO de que quieres eliminar TODA la data?\n\nEsta acción NO se puede deshacer.');
+
+            if (!confirmacion) {
+                return;
+            }
+
+            const output = document.getElementById('output');
+            output.className = 'output';
+            output.textContent = '🔄 Eliminando datos...';
+            output.style.display = 'block';
+
+            try {
+                let mensajes = [];
+
+                // 1. Limpiar localStorage
+                const itemsLocalStorage = ['categorias', 'perfiles', 'patronesAprendidos'];
+                itemsLocalStorage.forEach(item => {
+                    localStorage.removeItem(item);
+                });
+                mensajes.push('✓ localStorage limpiado');
+
+                // 2. Eliminar todas las tablas de IndexedDB
+                await db.mesesCarga.clear();
+                mensajes.push('✓ Meses cargados eliminados');
+
+                await db.transacciones.clear();
+                mensajes.push('✓ Transacciones eliminadas');
+
+                await db.presupuestos.clear();
+                mensajes.push('✓ Presupuestos eliminados');
+
+                await db.recurrentes.clear();
+                mensajes.push('✓ Recurrentes eliminados');
+
+                await db.historialRecurrentes.clear();
+                mensajes.push('✓ Historial de recurrentes eliminado');
+
+                await db.comprasPlaneadas.clear();
+                mensajes.push('✓ Compras planeadas eliminadas');
+
+                await db.liquidaciones.clear();
+                mensajes.push('✓ Liquidaciones eliminadas');
+
+                await db.ingresos.clear();
+                mensajes.push('✓ Ingresos eliminados');
+
+                // Contar registros restantes
+                const totalMeses = await db.mesesCarga.count();
+                const totalTransacciones = await db.transacciones.count();
+                const totalPresupuestos = await db.presupuestos.count();
+
+                mensajes.push('');
+                mensajes.push('📊 Verificación:');
+                mensajes.push(`   Meses: ${totalMeses}`);
+                mensajes.push(`   Transacciones: ${totalTransacciones}`);
+                mensajes.push(`   Presupuestos: ${totalPresupuestos}`);
+                mensajes.push('');
+                mensajes.push('✅ Base de datos completamente limpia!');
+                mensajes.push('');
+                mensajes.push('👉 Ahora puedes cerrar esta ventana y recargar la aplicación principal.');
+
+                output.className = 'output success';
+                output.innerHTML = '<pre>' + mensajes.join('\n') + '</pre>';
+
+            } catch (error) {
+                console.error('Error al resetear:', error);
+                output.className = 'output error';
+                output.innerHTML = `
+                    <strong>❌ Error al eliminar datos:</strong><br>
+                    ${error.message}<br><br>
+                    <small>Revisa la consola para más detalles.</small>
+                `;
+            }
+        }
+
+        function volverApp() {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

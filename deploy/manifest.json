@@ -1,0 +1,26 @@
+{
+  "name": "Finzi - Analizador de Gastos TC",
+  "short_name": "Finzi",
+  "description": "Analizador de gastos de tarjeta de crédito v3.2",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#2D3748",
+  "theme_color": "#7DD3C0",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg width='192' height='192' viewBox='0 0 192 192' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='192' height='192' rx='24' fill='%232D3748'/%3E%3Cdefs%3E%3ClinearGradient id='arrow-icon' x1='60' y1='50' x2='120' y2='140' gradientUnits='userSpaceOnBox'%3E%3Cstop offset='0%25' style='stop-color:%237DD3C0;stop-opacity:1' /%3E%3Cstop offset='50%25' style='stop-color:%23A8E063;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%2356AB2F;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M 60 140 L 120 60 L 140 80' stroke='url(%23arrow-icon)' stroke-width='20' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Crect x='156' y='60' width='12' height='60' rx='6' fill='%237DD3C0'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg width='512' height='512' viewBox='0 0 512 512' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='512' height='512' rx='64' fill='%232D3748'/%3E%3Cdefs%3E%3ClinearGradient id='arrow-icon-large' x1='160' y1='130' x2='320' y2='370' gradientUnits='userSpaceOnBox'%3E%3Cstop offset='0%25' style='stop-color:%237DD3C0;stop-opacity:1' /%3E%3Cstop offset='50%25' style='stop-color:%23A8E063;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%2356AB2F;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M 160 370 L 320 160 L 380 220' stroke='url(%23arrow-icon-large)' stroke-width='50' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Crect x='420' y='160' width='30' height='160' rx='15' fill='%237DD3C0'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity"],
+  "screenshots": []
+}

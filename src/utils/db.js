@@ -1,0 +1,497 @@
+// Configuración de IndexedDB con Dexie.js
+window.db = new Dexie('GastosTCDatabase');
+
+// Definir el esquema de la base de datos
+db.version(9).stores({
+    // Meses cargados: registra cada mes con transacciones
+    mesesCarga: '++id, mesAnio, fechaCarga',
+
+    // Transacciones: todas las compras del CSV
+    // Campos adicionales: esCompartido, porcentajePerfil, perfilCompartidoId
+    // Campos de reembolso: esReembolsable, reembolsoId
+    transacciones: '++id, mesAnioId, perfilId, fecha, categoria, comercio, esCompartido, esReembolsable, reembolsoId',
+
+    // Presupuestos: límites por categoría por mes
+    // esPlantilla: true para la plantilla base, false para meses específicos
+    presupuestos: '++id, mesAnioId, categoria, monto, esPlantilla',
+
+    // Recurrentes: transacciones mensuales fijas (Netflix, Luz, etc.)
+    recurrentes: '++id, nombre, categoria, perfilId, montoEstimado, activa, ultimoMes',
+
+    // Historial de recurrentes: registro de montos reales por mes
+    historialRecurrentes: '++id, recurrenteId, mesAnio, monto, fecha',
+
+    // Compras planeadas: para proyección futura
+    comprasPlaneadas: '++id, nombre, monto, cuotas, categoria, perfilId, fechaCreacion',
+
+    // Liquidaciones: registro de pagos entre perfiles para saldar cuentas
+    liquidaciones: '++id, mesAnioId, mesAnio, deudorId, acreedorId, monto, fecha, gastosIncluidos',
+
+    // Ingresos: registro de ingresos mensuales por perfil
+    ingresos: '++id, mesAnio, perfilId, monto, descripcion, fecha, esRecurrente',
+
+    // Reembolsos: seguimiento de gastos a reembolsar
+    // estado: 'pendiente', 'solicitado', 'pagado'
+    // tipoCompra: 'spot' o 'cuotas'
+    // Si es cuotas: transaccionOrigenId apunta a la primera cuota, cuotasTotal indica el total
+    reembolsos: '++id, transaccionOrigenId, nombreDeudor, estado, tipoCompra, cuotasTotal, fechaCreacion, fechaSolicitud, fechaPago'
+}).upgrade(tx => {
+    // Migración: agregar campos nuevos a transacciones existentes
+    return tx.table('transacciones').toCollection().modify(transaccion => {
+        if (transaccion.esReembolsable === undefined) {
+            transaccion.esReembolsable = false;
+        }
+        if (transaccion.reembolsoId === undefined) {
+            transaccion.reembolsoId = null;
+        }
+    });
+});
+
+// Funciones auxiliares para trabajar con la DB
+
+/**
+ * Obtiene o crea un mes de carga
+ * @param {string} mesAnio - Formato "YYYY-MM"
+ * @returns {Promise<number>} ID del mes
+ */
+window.getOrCreateMesAnio = async function(mesAnio) {
+    const mesExistente = await db.mesesCarga
+        .where('mesAnio')
+        .equals(mesAnio)
+        .first();
+
+    if (mesExistente) {
+        return mesExistente.id;
+    }
+
+    const id = await db.mesesCarga.add({
+        mesAnio: mesAnio,
+        fechaCarga: new Date().toISOString()
+    });
+
+    return id;
+}
+
+/**
+ * Obtiene todas las transacciones de un mes específico
+ * @param {number} mesAnioId - ID del mes
+ * @returns {Promise<Array>} Array de transacciones
+ */
+window.getTransaccionesByMes = async function(mesAnioId) {
+    return await db.transacciones
+        .where('mesAnioId')
+        .equals(mesAnioId)
+        .toArray();
+}
+
+/**
+ * Obtiene transacciones filtradas
+ * @param {number} mesAnioId - ID del mes
+ * @param {Object} filtros - { perfilId, categoria, tipo }
+ * @returns {Promise<Array>} Array de transacciones filtradas
+ */
+window.getTransaccionesFiltradas = async function(mesAnioId, filtros = {}) {
+    let query = db.transacciones.where('mesAnioId').equals(mesAnioId);
+
+    const transacciones = await query.toArray();
+
+    // Aplicar filtros en memoria
+    return transacciones.filter(t => {
+        if (filtros.perfilId && t.perfilId !== filtros.perfilId) return false;
+        if (filtros.categoria && t.categoria !== filtros.categoria) return false;
+        if (filtros.tipo) {
+            // Spot: sin cuotas O pago del mes 1/1
+            if (filtros.tipo === 'spot' && t.cuotaActual && !(t.cuotaActual === 1 && t.cuotasTotal === 1)) return false;
+            // Cuotas del mes: primera cuota de compra en cuotas (1/2, 1/3, etc.)
+            if (filtros.tipo === 'cuotasMes' && (!t.cuotaActual || t.cuotaActual !== 1 || t.cuotasTotal === 1)) return false;
+            // Cuotas anteriores: cuotas 2/12, 3/12, etc.
+            if (filtros.tipo === 'cuotasAnteriores' && (!t.cuotaActual || t.cuotaActual === 1)) return false;
+        }
+        return true;
+    });
+}
+
+/**
+ * Agrega múltiples transacciones
+ * @param {Array} transacciones - Array de transacciones
+ * @returns {Promise<void>}
+ */
+window.addTransacciones = async function(transacciones) {
+    return await db.transacciones.bulkAdd(transacciones);
+}
+
+/**
+ * Actualiza una transacción existente
+ * @param {number} id - ID de la transacción
+ * @param {Object} cambios - Campos a actualizar
+ * @returns {Promise<number>}
+ */
+window.updateTransaccion = async function(id, cambios) {
+    return await db.transacciones.update(id, cambios);
+}
+
+/**
+ * Elimina una transacción
+ * @param {number} id - ID de la transacción
+ * @returns {Promise<void>}
+ */
+window.deleteTransaccion = async function(id) {
+    return await db.transacciones.delete(id);
+}
+
+/**
+ * Obtiene presupuestos de un mes (o plantilla)
+ * @param {number|null} mesAnioId - ID del mes, o null para plantilla
+ * @returns {Promise<Array>} Array de presupuestos
+ */
+window.getPresupuestos = async function(mesAnioId = null) {
+    if (mesAnioId === null) {
+        // Obtener plantilla base
+        return await db.presupuestos
+            .where('esPlantilla')
+            .equals(1)
+            .toArray();
+    }
+
+    // Buscar presupuestos específicos del mes
+    const presupuestosMes = await db.presupuestos
+        .where('mesAnioId')
+        .equals(mesAnioId)
+        .toArray();
+
+    // Si no hay presupuestos para el mes, usar plantilla
+    if (presupuestosMes.length === 0) {
+        return await db.presupuestos
+            .where('esPlantilla')
+            .equals(1)
+            .toArray();
+    }
+
+    return presupuestosMes;
+}
+
+/**
+ * Guarda o actualiza presupuestos
+ * @param {Array} presupuestos - Array de presupuestos
+ * @param {number|null} mesAnioId - ID del mes, o null para plantilla
+ * @returns {Promise<void>}
+ */
+window.savePresupuestos = async function(presupuestos, mesAnioId = null) {
+    const esPlantilla = mesAnioId === null ? 1 : 0;
+
+    // Eliminar presupuestos anteriores
+    if (mesAnioId === null) {
+        await db.presupuestos.where('esPlantilla').equals(1).delete();
+    } else {
+        await db.presupuestos.where('mesAnioId').equals(mesAnioId).delete();
+    }
+
+    // Agregar nuevos presupuestos
+    const items = presupuestos.map(p => ({
+        mesAnioId: mesAnioId,
+        categoria: p.categoria,
+        monto: p.monto,
+        esPlantilla: esPlantilla
+    }));
+
+    await db.presupuestos.bulkAdd(items);
+}
+
+/**
+ * Elimina todas las transacciones de un mes
+ * @param {number} mesAnioId - ID del mes
+ * @returns {Promise<void>}
+ */
+window.deleteAllTransaccionesByMes = async function(mesAnioId) {
+    await db.transacciones.where('mesAnioId').equals(mesAnioId).delete();
+}
+
+/**
+ * Elimina un mes completo y todas sus transacciones
+ * @param {number} mesAnioId - ID del mes
+ * @returns {Promise<void>}
+ */
+window.deleteMesCompleto = async function(mesAnioId) {
+    await deleteAllTransaccionesByMes(mesAnioId);
+    await db.mesesCarga.delete(mesAnioId);
+}
+
+/**
+ * Obtiene recurrentes activas
+ * @returns {Promise<Array>} Array de recurrentes
+ */
+window.getRecurrentesActivas = async function() {
+    return await db.recurrentes
+        .where('activa')
+        .equals(1)
+        .toArray();
+}
+
+/**
+ * Obtiene historial de una recurrente
+ * @param {number} recurrenteId - ID de la recurrente
+ * @param {number} meses - Cantidad de meses hacia atrás
+ * @returns {Promise<Array>} Array de historial
+ */
+window.getHistorialRecurrente = async function(recurrenteId, meses = 6) {
+    return await db.historialRecurrentes
+        .where('recurrenteId')
+        .equals(recurrenteId)
+        .reverse()
+        .limit(meses)
+        .toArray();
+}
+
+/**
+ * Registra un pago de recurrente
+ * @param {number} recurrenteId - ID de la recurrente
+ * @param {string} mesAnio - Formato "YYYY-MM"
+ * @param {number} monto - Monto pagado
+ * @returns {Promise<number>} ID del registro
+ */
+window.registrarPagoRecurrente = async function(recurrenteId, mesAnio, monto) {
+    return await db.historialRecurrentes.add({
+        recurrenteId,
+        mesAnio,
+        monto,
+        fecha: new Date().toISOString()
+    });
+}
+
+/**
+ * Obtiene compras planeadas
+ * @returns {Promise<Array>} Array de compras planeadas
+ */
+window.getComprasPlaneadas = async function() {
+    return await db.comprasPlaneadas.toArray();
+}
+
+/**
+ * Agrega una compra planeada
+ * @param {Object} compra - Datos de la compra
+ * @returns {Promise<number>} ID de la compra
+ */
+window.addCompraPlaneada = async function(compra) {
+    return await db.comprasPlaneadas.add({
+        ...compra,
+        fechaCreacion: new Date().toISOString()
+    });
+}
+
+/**
+ * Elimina una compra planeada
+ * @param {number} id - ID de la compra
+ * @returns {Promise<void>}
+ */
+window.deleteCompraPlaneada = async function(id) {
+    return await db.comprasPlaneadas.delete(id);
+}
+
+// ============================================
+// FUNCIONES PARA LIQUIDACIONES
+// ============================================
+
+/**
+ * Agrega una nueva liquidación
+ * @param {Object} liquidacion - Datos de la liquidación
+ * @returns {Promise<number>} ID de la liquidación creada
+ */
+window.addLiquidacion = async function(liquidacion) {
+    return await db.liquidaciones.add(liquidacion);
+}
+
+/**
+ * Obtiene las liquidaciones de un mes específico
+ * @param {number} mesAnioId - ID del mes
+ * @returns {Promise<Array>} Array de liquidaciones
+ */
+window.getLiquidaciones = async function(mesAnioId) {
+    return await db.liquidaciones
+        .where('mesAnioId')
+        .equals(mesAnioId)
+        .reverse()
+        .sortBy('fecha');
+}
+
+/**
+ * Obtiene todas las liquidaciones
+ * @returns {Promise<Array>} Array de todas las liquidaciones
+ */
+window.getAllLiquidaciones = async function() {
+    return await db.liquidaciones.reverse().sortBy('fecha');
+}
+
+/**
+ * Elimina una liquidación
+ * @param {number} id - ID de la liquidación
+ * @returns {Promise<void>}
+ */
+window.deleteLiquidacion = async function(id) {
+    return await db.liquidaciones.delete(id);
+}
+
+// ============================================
+// FUNCIONES PARA INGRESOS
+// ============================================
+
+/**
+ * Obtiene los ingresos de un mes específico
+ * @param {string} mesAnio - Formato "YYYY-MM"
+ * @returns {Promise<Array>} Array de ingresos
+ */
+window.getIngresos = async function(mesAnio) {
+    return await db.ingresos
+        .where('mesAnio')
+        .equals(mesAnio)
+        .toArray();
+}
+
+/**
+ * Agrega un nuevo ingreso
+ * @param {Object} ingreso - Datos del ingreso
+ * @returns {Promise<number>} ID del ingreso creado
+ */
+window.addIngreso = async function(ingreso) {
+    return await db.ingresos.add({
+        ...ingreso,
+        fecha: ingreso.fecha || new Date().toISOString()
+    });
+}
+
+/**
+ * Actualiza un ingreso existente
+ * @param {number} id - ID del ingreso
+ * @param {Object} cambios - Campos a actualizar
+ * @returns {Promise<number>}
+ */
+window.updateIngreso = async function(id, cambios) {
+    return await db.ingresos.update(id, cambios);
+}
+
+/**
+ * Elimina un ingreso
+ * @param {number} id - ID del ingreso
+ * @returns {Promise<void>}
+ */
+window.deleteIngreso = async function(id) {
+    return await db.ingresos.delete(id);
+}
+
+/**
+ * Obtiene el total de ingresos de un mes por perfil
+ * @param {string} mesAnio - Formato "YYYY-MM"
+ * @param {number} perfilId - ID del perfil (opcional)
+ * @returns {Promise<number>} Total de ingresos
+ */
+window.getTotalIngresosMes = async function(mesAnio, perfilId = null) {
+    let query = db.ingresos.where('mesAnio').equals(mesAnio);
+    const ingresos = await query.toArray();
+
+    return ingresos
+        .filter(i => !perfilId || i.perfilId === perfilId)
+        .reduce((sum, i) => sum + i.monto, 0);
+}
+
+// ============================================
+// FUNCIONES PARA REEMBOLSOS
+// ============================================
+
+/**
+ * Crea un nuevo reembolso
+ * @param {Object} reembolso - Datos del reembolso
+ * @returns {Promise<number>} ID del reembolso creado
+ */
+window.addReembolso = async function(reembolso) {
+    const id = await db.reembolsos.add({
+        ...reembolso,
+        fechaCreacion: new Date().toISOString()
+    });
+
+    // Marcar la transacción origen como reembolsable
+    await db.transacciones.update(reembolso.transaccionOrigenId, {
+        esReembolsable: true,
+        reembolsoId: id
+    });
+
+    return id;
+}
+
+/**
+ * Obtiene todos los reembolsos
+ * @param {string} estado - Filtrar por estado ('pendiente', 'solicitado', 'pagado', o null para todos)
+ * @returns {Promise<Array>} Array de reembolsos
+ */
+window.getReembolsos = async function(estado = null) {
+    if (estado) {
+        return await db.reembolsos
+            .where('estado')
+            .equals(estado)
+            .reverse()
+            .sortBy('fechaCreacion');
+    }
+    return await db.reembolsos.reverse().sortBy('fechaCreacion');
+}
+
+/**
+ * Obtiene un reembolso por ID
+ * @param {number} id - ID del reembolso
+ * @returns {Promise<Object>} Reembolso
+ */
+window.getReembolsoById = async function(id) {
+    return await db.reembolsos.get(id);
+}
+
+/**
+ * Actualiza el estado de un reembolso
+ * @param {number} id - ID del reembolso
+ * @param {string} nuevoEstado - Nuevo estado ('pendiente', 'solicitado', 'pagado')
+ * @returns {Promise<number>}
+ */
+window.updateEstadoReembolso = async function(id, nuevoEstado) {
+    const cambios = { estado: nuevoEstado };
+
+    if (nuevoEstado === 'solicitado') {
+        cambios.fechaSolicitud = new Date().toISOString();
+    } else if (nuevoEstado === 'pagado') {
+        cambios.fechaPago = new Date().toISOString();
+    }
+
+    return await db.reembolsos.update(id, cambios);
+}
+
+/**
+ * Elimina un reembolso
+ * @param {number} id - ID del reembolso
+ * @returns {Promise<void>}
+ */
+window.deleteReembolso = async function(id) {
+    const reembolso = await db.reembolsos.get(id);
+    if (reembolso) {
+        // Desmarcar la transacción origen
+        await db.transacciones.update(reembolso.transaccionOrigenId, {
+            esReembolsable: false,
+            reembolsoId: null
+        });
+    }
+    return await db.reembolsos.delete(id);
+}
+
+/**
+ * Obtiene reembolsos con información de transacciones asociadas
+ * @param {string} estado - Filtrar por estado (opcional)
+ * @returns {Promise<Array>} Array de reembolsos con datos de transacciones
+ */
+window.getReembolsosConTransacciones = async function(estado = null) {
+    const reembolsos = await getReembolsos(estado);
+    const result = [];
+
+    for (const reembolso of reembolsos) {
+        const transaccion = await db.transacciones.get(reembolso.transaccionOrigenId);
+        result.push({
+            ...reembolso,
+            transaccion
+        });
+    }
+
+    return result;
+}

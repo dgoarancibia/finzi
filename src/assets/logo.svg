@@ -1,0 +1,19 @@
+<svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Arrow gradient -->
+  <defs>
+    <linearGradient id="arrow-gradient" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnBox">
+      <stop offset="0%" style="stop-color:#7DD3C0;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#A8E063;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#56AB2F;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Flecha ascendente -->
+  <path d="M 30 32 L 50 12 L 60 22" stroke="url(#arrow-gradient)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Texto FINZI -->
+  <text x="0" y="30" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="currentColor">FINZI</text>
+
+  <!-- Barra vertical derecha -->
+  <rect x="115" y="10" width="4" height="20" rx="2" fill="#7DD3C0"/>
+</svg>

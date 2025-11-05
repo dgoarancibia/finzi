@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset Categorías</title>
+</head>
+<body>
+    <h1>Reset de Categorías</h1>
+    <button onclick="resetCategorias()" style="padding: 20px; font-size: 18px; cursor: pointer;">
+        Resetear Categorías a Default
+    </button>
+    <pre id="output"></pre>
+    
+    <script>
+        function resetCategorias() {
+            localStorage.removeItem('categorias');
+            localStorage.removeItem('perfiles');
+            document.getElementById('output').textContent = '✅ localStorage limpiado!\n\nAhora cierra esta ventana y recarga la aplicación principal.';
+        }
+    </script>
+</body>
+</html>

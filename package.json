@@ -1,0 +1,18 @@
+{
+  "name": "analizador-gastos-tc",
+  "version": "3.2.0",
+  "description": "Analizador de Gastos de Tarjeta de Crédito - Single Page Application",
+  "main": "index.html",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "npm run build && open index.html"
+  },
+  "keywords": [
+    "gastos",
+    "tarjeta-credito",
+    "presupuestos",
+    "finanzas-personales"
+  ],
+  "author": "Tu Nombre",
+  "license": "MIT"
+}

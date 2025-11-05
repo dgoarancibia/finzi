@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Gastos TC v3.2</title>
+
+    <!-- TailwindCSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
+
+    <!-- React 18 CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel Standalone para JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- PapaParse para CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Dexie.js para IndexedDB -->
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+
+    <!-- Firebase SDK v9 (Compat para compatibilidad) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        /* Animaciones suaves minimalistas */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse-soft {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .animate-slideIn {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .animate-pulse-soft {
+            animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        /* Fondo minimalista limpio */
+        body {
+            background: #f8f9fa;
+            min-height: 100vh;
+        }
+
+        body.dark {
+            background: #0f172a;
+        }
+
+        /* Patrón sutil de fondo */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(99, 102, 241, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.02) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body.dark::before {
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.08) 0%, transparent 50%);
+        }
+
+        /* Scrollbar minimalista */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f3f5;
+            border-radius: 10px;
+        }
+
+        body.dark ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #6366f1;
+            border-radius: 10px;
+            border: 2px solid #f1f3f5;
+        }
+
+        body.dark ::-webkit-scrollbar-thumb {
+            border-color: #1e293b;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4f46e5;
+        }
+
+        /* Transiciones suaves */
+        * {
+            transition: all 0.3s ease;
+        }
+
+        /* Fix para charts responsivos */
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        /* Sombras minimalistas */
+        .shadow-minimal {
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+        }
+
+        .shadow-minimal-md {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        .shadow-minimal-lg {
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Hover effects minimalistas */
+        .hover-lift {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .hover-lift:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.12), 0 6px 8px rgba(0, 0, 0, 0.08);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- INICIALIZACIÓN GLOBAL DE REACT HELPERS -->
+    <script>
+        // Definir memo globalmente para todos los componentes
+        window.memo = React.memo;
+    </script>
+
+    <!-- CONSTANTS -->
+    <script>
+        /* INJECT:constants/categories.js */
+    </script>
+
+    <script>
+        /* INJECT:constants/patterns.js */
+    </script>
+
+    <!-- UTILS -->
+    <script>
+        /* INJECT:utils/db.js */
+    </script>
+
+    <script>
+        /* INJECT:utils/formatters.js */
+    </script>
+
+    <script>
+        /* INJECT:utils/csvParser.js */
+    </script>
+
+    <script>
+        /* INJECT:utils/categorizer.js */
+    </script>
+
+    <script>
+        /* INJECT:utils/budgetCalculator.js */
+    </script>
+
+    <script>
+        /* INJECT:utils/projections.js */
+    </script>
+
+    <!-- FIREBASE (v3.3) -->
+    <script>
+        /* INJECT:utils/firebase-config.js */
+    </script>
+
+    <script>
+        /* INJECT:utils/firebase.js */
+    </script>
+
+    <script>
+        /* INJECT:utils/dataLayer.js */
+    </script>
+
+    <!-- SHARED COMPONENTS -->
+    <script type="text/babel">
+        /* INJECT:components/shared/Modal.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/shared/Card.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/shared/ProgressBar.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/shared/AlertBadge.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/shared/CollapsibleSection.jsx */
+    </script>
+
+    <!-- MAIN COMPONENTS -->
+    <script type="text/babel">
+        /* INJECT:components/Login.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Sidebar.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Home.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/AnalisisCierre.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/HistorialMeses.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Balance.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Perfiles.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Categorias.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Presupuestos.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/CuotasFuturas.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Recurrentes.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Simulador.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Ingresos.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Reembolsos.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/Proyecciones.jsx */
+    </script>
+
+    <!-- APP PRINCIPAL -->
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useCallback, useContext, createContext, useRef } = React;
+
+        // Context Global
+        const AppContext = createContext();
+
+        // Hook personalizado para usar el contexto
+        const useApp = () => {
+            const context = useContext(AppContext);
+            if (!context) {
+                throw new Error('useApp debe usarse dentro de AppProvider');
+            }
+            return context;
+        };
+
+        // Componente App Principal
+        function App() {
+            const [currentPage, setCurrentPage] = useState('home');
+            const [selectedMonth, setSelectedMonth] = useState(null);
+            const [selectedMonths, setSelectedMonths] = useState([]); // Nuevo: array de meses seleccionados
+            const [perfiles, setPerfiles] = useState([]);
+            const [categorias, setCategorias] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [mesesCargados, setMesesCargados] = useState([]);
+            const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+            const [isDarkMode, setIsDarkMode] = useState(() => {
+                // Inicializar desde localStorage
+                const saved = localStorage.getItem('darkMode');
+                return saved === 'true';
+            });
+
+            // FIREBASE: Estado de autenticación
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [firebaseReady, setFirebaseReady] = useState(false);
+
+            // Aplicar dark mode al document
+            useEffect(() => {
+                if (isDarkMode) {
+                    document.documentElement.classList.add('dark');
+                    document.body.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    document.body.classList.remove('dark');
+                }
+                localStorage.setItem('darkMode', isDarkMode);
+            }, [isDarkMode]);
+
+            // FIREBASE: Inicializar Firebase
+            useEffect(() => {
+                const initFirebase = async () => {
+                    if (window.USE_FIREBASE) {
+                        try {
+                            await window.initializeFirebase();
+                            setFirebaseReady(true);
+                            console.log('✅ Firebase inicializado en App');
+                        } catch (error) {
+                            console.error('❌ Error al inicializar Firebase:', error);
+                            // Si falla Firebase, deshabilitarlo y usar IndexedDB
+                            window.USE_FIREBASE = false;
+                            setFirebaseReady(true);
+                        }
+                    } else {
+                        setFirebaseReady(true);
+                    }
+                };
+
+                initFirebase();
+            }, []);
+
+            // FIREBASE: Listener de autenticación
+            useEffect(() => {
+                if (!window.USE_FIREBASE || !firebaseReady) return;
+
+                const handleAuthChange = (event) => {
+                    const { isAuthenticated: authStatus } = event.detail;
+                    setIsAuthenticated(authStatus);
+
+                    // Si se autentica, reinicializar app
+                    if (authStatus) {
+                        initializeApp();
+                    }
+                };
+
+                window.addEventListener('firebaseUserChanged', handleAuthChange);
+
+                return () => {
+                    window.removeEventListener('firebaseUserChanged', handleAuthChange);
+                };
+            }, [firebaseReady]);
+
+            // Inicializar datos al montar
+            useEffect(() => {
+                // Si usa Firebase, esperar autenticación
+                if (window.USE_FIREBASE) {
+                    if (firebaseReady && isAuthenticated) {
+                        initializeApp();
+                    } else if (firebaseReady && !isAuthenticated) {
+                        // No autenticado, mostrar login
+                        setLoading(false);
+                    }
+                } else {
+                    // No usa Firebase, inicializar directamente
+                    initializeApp();
+                }
+            }, [firebaseReady, isAuthenticated]);
+
+            const initializeApp = async () => {
+                try {
+                    // Cargar perfiles desde localStorage o crear default
+                    const storedPerfiles = localStorage.getItem('perfiles');
+                    if (storedPerfiles) {
+                        setPerfiles(JSON.parse(storedPerfiles));
+                    } else {
+                        const defaultPerfiles = window.getDefaultPerfiles();
+                        setPerfiles(defaultPerfiles);
+                        localStorage.setItem('perfiles', JSON.stringify(defaultPerfiles));
+                    }
+
+                    // Cargar categorías desde localStorage o crear default
+                    const storedCategorias = localStorage.getItem('categorias');
+                    if (storedCategorias) {
+                        setCategorias(JSON.parse(storedCategorias));
+                    } else {
+                        setCategorias(window.DEFAULT_CATEGORIES);
+                        localStorage.setItem('categorias', JSON.stringify(window.DEFAULT_CATEGORIES));
+                    }
+
+                    // Cargar meses desde IndexedDB
+                    const meses = await db.mesesCarga.toArray();
+                    setMesesCargados(meses);
+
+                    // Seleccionar el mes más reciente por defecto
+                    if (meses.length > 0) {
+                        const mesReciente = meses.sort((a, b) =>
+                            new Date(b.fechaCarga) - new Date(a.fechaCarga)
+                        )[0];
+                        setSelectedMonth(mesReciente);
+                        setSelectedMonths([mesReciente]); // Inicializar con el mes más reciente
+                    }
+
+                    setLoading(false);
+                } catch (error) {
+                    console.error('Error al inicializar la app:', error);
+                    setLoading(false);
+                }
+            };
+
+            // Funciones para actualizar perfiles y categorías
+            const updatePerfiles = useCallback((newPerfiles) => {
+                setPerfiles(newPerfiles);
+                localStorage.setItem('perfiles', JSON.stringify(newPerfiles));
+            }, []);
+
+            const updateCategorias = useCallback((newCategorias) => {
+                setCategorias(newCategorias);
+                localStorage.setItem('categorias', JSON.stringify(newCategorias));
+            }, []);
+
+            const refreshMesesCargados = useCallback(async () => {
+                const meses = await db.mesesCarga.toArray();
+                setMesesCargados(meses);
+            }, []);
+
+            const contextValue = {
+                currentPage,
+                setCurrentPage,
+                selectedMonth,
+                setSelectedMonth,
+                selectedMonths,
+                setSelectedMonths,
+                perfiles,
+                updatePerfiles,
+                categorias,
+                updateCategorias,
+                mesesCargados,
+                refreshMesesCargados,
+                isSidebarOpen,
+                setIsSidebarOpen,
+                isDarkMode,
+                setIsDarkMode
+            };
+
+            // FIREBASE: Mostrar Login si usa Firebase y no está autenticado
+            if (window.USE_FIREBASE && firebaseReady && !isAuthenticated && !loading) {
+                return <Login />;
+            }
+
+            if (loading) {
+                return (
+                    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-slate-900">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mx-auto mb-4"></div>
+                            <p className="text-gray-700 dark:text-gray-300 text-xl font-semibold">Cargando...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <AppContext.Provider value={contextValue}>
+                    <div className="flex min-h-screen">
+                        <Sidebar />
+                        <main className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'}`}>
+                            <div className="p-6">
+                                {currentPage === 'home' && <Home />}
+                                {currentPage === 'ingresos' && <Ingresos />}
+                                {currentPage === 'reembolsos' && <Reembolsos />}
+                                {currentPage === 'proyecciones' && <Proyecciones />}
+                                {currentPage === 'analisis' && <AnalisisCierre />}
+                                {currentPage === 'historial' && <HistorialMeses />}
+                                {currentPage === 'balance' && <Balance />}
+                                {currentPage === 'perfiles' && <Perfiles />}
+                                {currentPage === 'categorias' && <Categorias />}
+                                {currentPage === 'presupuestos' && <Presupuestos />}
+                                {currentPage === 'cuotasFuturas' && <CuotasFuturas />}
+                                {currentPage === 'recurrentes' && <Recurrentes />}
+                                {currentPage === 'simulador' && <Simulador />}
+                            </div>
+                        </main>
+                    </div>
+                </AppContext.Provider>
+            );
+        }
+
+        // Renderizar la aplicación
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
