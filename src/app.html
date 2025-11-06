@@ -425,17 +425,29 @@
             useEffect(() => {
                 if (!window.USE_FIREBASE || !firebaseReady) return;
 
+                console.log('🎧 Registrando listener de autenticación...');
+
                 const handleAuthChange = (event) => {
                     const { isAuthenticated: authStatus } = event.detail;
+                    console.log('🔄 Auth changed:', authStatus);
                     setIsAuthenticated(authStatus);
 
                     // Si se autentica, reinicializar app
                     if (authStatus) {
+                        console.log('✅ Usuario autenticado, inicializando app...');
                         initializeApp();
                     }
                 };
 
                 window.addEventListener('firebaseUserChanged', handleAuthChange);
+                console.log('✅ Listener registrado');
+
+                // Verificar si ya hay un usuario autenticado (caso de login antes de que se registre el listener)
+                if (window.currentUser) {
+                    console.log('🔍 Usuario ya autenticado, inicializando app...');
+                    setIsAuthenticated(true);
+                    initializeApp();
+                }
 
                 return () => {
                     window.removeEventListener('firebaseUserChanged', handleAuthChange);
@@ -460,6 +472,8 @@
 
             const initializeApp = async () => {
                 try {
+                    console.log('📱 Iniciando carga de datos...');
+
                     // Cargar perfiles desde localStorage o crear default
                     const storedPerfiles = localStorage.getItem('perfiles');
                     if (storedPerfiles) {
@@ -469,6 +483,7 @@
                         setPerfiles(defaultPerfiles);
                         localStorage.setItem('perfiles', JSON.stringify(defaultPerfiles));
                     }
+                    console.log('✅ Perfiles cargados');
 
                     // Cargar categorías desde localStorage o crear default
                     const storedCategorias = localStorage.getItem('categorias');
@@ -478,9 +493,12 @@
                         setCategorias(window.DEFAULT_CATEGORIES);
                         localStorage.setItem('categorias', JSON.stringify(window.DEFAULT_CATEGORIES));
                     }
+                    console.log('✅ Categorías cargadas');
 
-                    // Cargar meses desde IndexedDB
-                    const meses = await db.mesesCarga.toArray();
+                    // Cargar meses (usa dataLayer que funciona con IndexedDB o Firebase)
+                    console.log('⏳ Cargando meses...');
+                    const meses = await window.getMesesCarga();
+                    console.log('✅ Meses cargados:', meses.length);
                     setMesesCargados(meses);
 
                     // Seleccionar el mes más reciente por defecto
@@ -492,9 +510,11 @@
                         setSelectedMonths([mesReciente]); // Inicializar con el mes más reciente
                     }
 
+                    console.log('✅ App inicializada correctamente');
                     setLoading(false);
                 } catch (error) {
-                    console.error('Error al inicializar la app:', error);
+                    console.error('❌ Error al inicializar la app:', error);
+                    alert('Error al cargar la aplicación: ' + error.message);
                     setLoading(false);
                 }
             };

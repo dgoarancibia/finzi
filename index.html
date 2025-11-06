@@ -2516,6 +2516,7 @@ window.initializeFirebase = async function() {
                 }
 
                 // Disparar evento personalizado
+                console.log('🔔 Disparando evento firebaseUserChanged (autenticado)');
                 window.dispatchEvent(new CustomEvent('firebaseUserChanged', {
                     detail: { user, isAuthenticated: true }
                 }));
@@ -3742,7 +3743,7 @@ const Login = () => {
                         <div className="inline-block">
                             <svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-900 dark:text-white mx-auto">
                                 <defs>
-                                    <linearGradient id="arrow-gradient-login" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnBox">
+                                    <linearGradient id="arrow-gradient-login" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnUse">
                                         <stop offset="0%" style={{stopColor: '#7DD3C0', stopOpacity: 1}} />
                                         <stop offset="50%" style={{stopColor: '#A8E063', stopOpacity: 1}} />
                                         <stop offset="100%" style={{stopColor: '#56AB2F', stopOpacity: 1}} />
@@ -10338,17 +10339,29 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
             useEffect(() => {
                 if (!window.USE_FIREBASE || !firebaseReady) return;
 
+                console.log('🎧 Registrando listener de autenticación...');
+
                 const handleAuthChange = (event) => {
                     const { isAuthenticated: authStatus } = event.detail;
+                    console.log('🔄 Auth changed:', authStatus);
                     setIsAuthenticated(authStatus);
 
                     // Si se autentica, reinicializar app
                     if (authStatus) {
+                        console.log('✅ Usuario autenticado, inicializando app...');
                         initializeApp();
                     }
                 };
 
                 window.addEventListener('firebaseUserChanged', handleAuthChange);
+                console.log('✅ Listener registrado');
+
+                // Verificar si ya hay un usuario autenticado (caso de login antes de que se registre el listener)
+                if (window.currentUser) {
+                    console.log('🔍 Usuario ya autenticado, inicializando app...');
+                    setIsAuthenticated(true);
+                    initializeApp();
+                }
 
                 return () => {
                     window.removeEventListener('firebaseUserChanged', handleAuthChange);
@@ -10373,6 +10386,8 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
 
             const initializeApp = async () => {
                 try {
+                    console.log('📱 Iniciando carga de datos...');
+
                     // Cargar perfiles desde localStorage o crear default
                     const storedPerfiles = localStorage.getItem('perfiles');
                     if (storedPerfiles) {
@@ -10382,6 +10397,7 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
                         setPerfiles(defaultPerfiles);
                         localStorage.setItem('perfiles', JSON.stringify(defaultPerfiles));
                     }
+                    console.log('✅ Perfiles cargados');
 
                     // Cargar categorías desde localStorage o crear default
                     const storedCategorias = localStorage.getItem('categorias');
@@ -10391,9 +10407,12 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
                         setCategorias(window.DEFAULT_CATEGORIES);
                         localStorage.setItem('categorias', JSON.stringify(window.DEFAULT_CATEGORIES));
                     }
+                    console.log('✅ Categorías cargadas');
 
-                    // Cargar meses desde IndexedDB
-                    const meses = await db.mesesCarga.toArray();
+                    // Cargar meses (usa dataLayer que funciona con IndexedDB o Firebase)
+                    console.log('⏳ Cargando meses...');
+                    const meses = await window.getMesesCarga();
+                    console.log('✅ Meses cargados:', meses.length);
                     setMesesCargados(meses);
 
                     // Seleccionar el mes más reciente por defecto
@@ -10405,9 +10424,11 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
                         setSelectedMonths([mesReciente]); // Inicializar con el mes más reciente
                     }
 
+                    console.log('✅ App inicializada correctamente');
                     setLoading(false);
                 } catch (error) {
-                    console.error('Error al inicializar la app:', error);
+                    console.error('❌ Error al inicializar la app:', error);
+                    alert('Error al cargar la aplicación: ' + error.message);
                     setLoading(false);
                 }
             };

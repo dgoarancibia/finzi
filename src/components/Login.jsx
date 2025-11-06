@@ -28,7 +28,7 @@ const Login = () => {
                         <div className="inline-block">
                             <svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-900 dark:text-white mx-auto">
                                 <defs>
-                                    <linearGradient id="arrow-gradient-login" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnBox">
+                                    <linearGradient id="arrow-gradient-login" x1="30" y1="8" x2="50" y2="32" gradientUnits="userSpaceOnUse">
                                         <stop offset="0%" style={{stopColor: '#7DD3C0', stopOpacity: 1}} />
                                         <stop offset="50%" style={{stopColor: '#A8E063', stopOpacity: 1}} />
                                         <stop offset="100%" style={{stopColor: '#56AB2F', stopOpacity: 1}} />

@@ -80,6 +80,7 @@ window.initializeFirebase = async function() {
                 }
 
                 // Disparar evento personalizado
+                console.log('🔔 Disparando evento firebaseUserChanged (autenticado)');
                 window.dispatchEvent(new CustomEvent('firebaseUserChanged', {
                     detail: { user, isAuthenticated: true }
                 }));
