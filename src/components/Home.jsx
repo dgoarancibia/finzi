@@ -345,7 +345,7 @@ const Home = () => {
             {/* Header con selector de mes y botón cargar */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Dashboard de Gastos</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard de Gastos</h1>
                     <p className="text-gray-600">Análisis detallado de tus transacciones</p>
                 </div>
                 <button
@@ -869,7 +869,7 @@ const ListaTransacciones = memo(({ transacciones, perfiles, categorias, onEditar
                             {/* Información principal */}
                             <div className="flex-1">
                                 <div className="flex items-center space-x-2">
-                                    <p className="font-semibold text-gray-800">{t.comercio}</p>
+                                    <p className="font-semibold text-gray-800 dark:text-white">{t.comercio}</p>
                                     {t.cuotaActual && (
                                         <Badge color="blue" size="sm">
                                             {t.cuotaActual}/{t.cuotasTotal}
@@ -896,7 +896,7 @@ const ListaTransacciones = memo(({ transacciones, perfiles, categorias, onEditar
 
                             {/* Monto */}
                             <div className="text-right">
-                                <p className="text-xl font-bold text-gray-800">{formatearMonto(t.monto)}</p>
+                                <p className="text-xl font-bold text-gray-800 dark:text-white">{formatearMonto(t.monto)}</p>
                             </div>
                         </div>
 
@@ -970,7 +970,7 @@ const BalanceCompartido = memo(({ transacciones, perfiles }) => {
                                 className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: perfiles[0].color }}
                             />
-                            <p className="font-semibold text-gray-800">{perfiles[0].nombre}</p>
+                            <p className="font-semibold text-gray-800 dark:text-white">{perfiles[0].nombre}</p>
                         </div>
                         <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
@@ -990,7 +990,7 @@ const BalanceCompartido = memo(({ transacciones, perfiles }) => {
                                     className="w-3 h-3 rounded-full"
                                     style={{ backgroundColor: perfiles[1].color }}
                                 />
-                                <p className="font-semibold text-gray-800">{perfiles[1].nombre}</p>
+                                <p className="font-semibold text-gray-800 dark:text-white">{perfiles[1].nombre}</p>
                             </div>
                             <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
@@ -1084,15 +1084,15 @@ const CardDisponible = memo(({ disponible, categorias }) => {
                 <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-300">
                     <div className="text-center">
                         <p className="text-xs text-gray-600 mb-1">Presupuesto</p>
-                        <p className="text-lg font-bold text-gray-800">{formatearMonto(presupuestoTotal)}</p>
+                        <p className="text-lg font-bold text-gray-800 dark:text-white">{formatearMonto(presupuestoTotal)}</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xs text-gray-600 mb-1">Gastado</p>
-                        <p className="text-lg font-bold text-gray-800">-{formatearMonto(gastadoTotal)}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Gastado</p>
+                        <p className="text-lg font-bold text-gray-800 dark:text-white">-{formatearMonto(gastadoTotal)}</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xs text-gray-600 mb-1">Cuotas Futuras</p>
-                        <p className="text-lg font-bold text-gray-800">-{formatearMonto(cuotasProyectadas)}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Cuotas Futuras</p>
+                        <p className="text-lg font-bold text-gray-800 dark:text-white">-{formatearMonto(cuotasProyectadas)}</p>
                     </div>
                 </div>
 
@@ -1755,7 +1755,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                 >
                                     <div className="text-center">
                                         <span className="text-xl sm:text-3xl block mb-1 sm:mb-2">⚡</span>
-                                        <p className="font-semibold text-gray-800 text-xs sm:text-base">Auto</p>
+                                        <p className="font-semibold text-gray-800 dark:text-white text-xs sm:text-base">Auto</p>
                                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">
                                             Carga rápida con categorización automática.
                                         </p>
@@ -1772,7 +1772,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                 >
                                     <div className="text-center">
                                         <span className="text-xl sm:text-3xl block mb-1 sm:mb-2">👁️</span>
-                                        <p className="font-semibold text-gray-800 text-xs sm:text-base">Manual</p>
+                                        <p className="font-semibold text-gray-800 dark:text-white text-xs sm:text-base">Manual</p>
                                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">
                                             Revisa cada transacción una por una.
                                         </p>

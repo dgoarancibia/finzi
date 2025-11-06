@@ -2,7 +2,7 @@
 window.db = new Dexie('GastosTCDatabase');
 
 // Definir el esquema de la base de datos
-db.version(9).stores({
+db.version(10).stores({
     // Meses cargados: registra cada mes con transacciones
     mesesCarga: '++id, mesAnio, fechaCarga',
 
@@ -15,8 +15,11 @@ db.version(9).stores({
     // esPlantilla: true para la plantilla base, false para meses específicos
     presupuestos: '++id, mesAnioId, categoria, monto, esPlantilla',
 
-    // Recurrentes: transacciones mensuales fijas (Netflix, Luz, etc.)
-    recurrentes: '++id, nombre, categoria, perfilId, montoEstimado, activa, ultimoMes',
+    // Recurrentes: transacciones recurrentes con frecuencias variables
+    // frecuencia: 'mensual', 'bimestral', 'trimestral', 'semestral', 'anual', 'personalizado'
+    // fechaProximoPago: próxima fecha de cobro (YYYY-MM-DD)
+    // monto: monto del pago (no mensual estimado, sino el monto real del pago)
+    recurrentes: '++id, nombre, categoria, perfilId, monto, frecuencia, fechaProximoPago, activa',
 
     // Historial de recurrentes: registro de montos reales por mes
     historialRecurrentes: '++id, recurrenteId, mesAnio, monto, fecha',
@@ -36,13 +39,21 @@ db.version(9).stores({
     // Si es cuotas: transaccionOrigenId apunta a la primera cuota, cuotasTotal indica el total
     reembolsos: '++id, transaccionOrigenId, nombreDeudor, estado, tipoCompra, cuotasTotal, fechaCreacion, fechaSolicitud, fechaPago'
 }).upgrade(tx => {
-    // Migración: agregar campos nuevos a transacciones existentes
-    return tx.table('transacciones').toCollection().modify(transaccion => {
-        if (transaccion.esReembolsable === undefined) {
-            transaccion.esReembolsable = false;
+    // Migración de versión 9 a 10: actualizar recurrentes con nuevos campos
+    return tx.table('recurrentes').toCollection().modify(recurrente => {
+        // Si no tiene frecuencia, asignar 'mensual' por defecto
+        if (!recurrente.frecuencia) {
+            recurrente.frecuencia = 'mensual';
         }
-        if (transaccion.reembolsoId === undefined) {
-            transaccion.reembolsoId = null;
+        // Si no tiene fechaProximoPago, calcular del primer día del próximo mes
+        if (!recurrente.fechaProximoPago) {
+            const hoy = new Date();
+            const proximoMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1);
+            recurrente.fechaProximoPago = proximoMes.toISOString().split('T')[0];
+        }
+        // Migrar montoEstimado a monto si existe
+        if (recurrente.montoEstimado !== undefined && !recurrente.monto) {
+            recurrente.monto = recurrente.montoEstimado;
         }
     });
 });

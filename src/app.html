@@ -65,8 +65,21 @@
             }
         }
 
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
         .animate-slideIn {
             animation: slideIn 0.3s ease-out;
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-out;
         }
 
         .animate-pulse-soft {
@@ -375,6 +388,10 @@
         /* INJECT:components/Proyecciones.jsx */
     </script>
 
+    <script type="text/babel">
+        /* INJECT:components/TourGuide.jsx */
+    </script>
+
     <!-- APP PRINCIPAL -->
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback, useContext, createContext, useRef } = React;
@@ -615,6 +632,8 @@
                                 {currentPage === 'simulador' && <Simulador />}
                             </div>
                         </main>
+                        {/* Tour Guiado de Bienvenida */}
+                        <TourGuide />
                     </div>
                 </AppContext.Provider>
             );

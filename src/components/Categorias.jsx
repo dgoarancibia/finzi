@@ -35,7 +35,7 @@ const Categorias = () => {
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Gestión de Categorías</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Categorías</h1>
                     <p className="text-gray-600">Personaliza las categorías de gastos</p>
                 </div>
                 <button onClick={() => { setCategoriaEditar(null); setShowModal(true); }} className="px-6 py-3 bg-white text-indigo-600 font-semibold rounded-lg hover:bg-indigo-50 transition-colors shadow-lg">

@@ -223,7 +223,7 @@ const AnalisisMultiMes = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Análisis Multi-Mes</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Análisis Multi-Mes</h1>
                 <p className="text-gray-600">Compara múltiples meses, trimestres o año completo</p>
             </div>
 

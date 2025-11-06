@@ -65,8 +65,21 @@
             }
         }
 
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
         .animate-slideIn {
             animation: slideIn 0.3s ease-out;
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-out;
         }
 
         .animate-pulse-soft {
@@ -408,7 +421,7 @@ window.COMMERCE_NORMALIZATIONS = {
 window.db = new Dexie('GastosTCDatabase');
 
 // Definir el esquema de la base de datos
-db.version(9).stores({
+db.version(10).stores({
     // Meses cargados: registra cada mes con transacciones
     mesesCarga: '++id, mesAnio, fechaCarga',
 
@@ -421,8 +434,11 @@ db.version(9).stores({
     // esPlantilla: true para la plantilla base, false para meses específicos
     presupuestos: '++id, mesAnioId, categoria, monto, esPlantilla',
 
-    // Recurrentes: transacciones mensuales fijas (Netflix, Luz, etc.)
-    recurrentes: '++id, nombre, categoria, perfilId, montoEstimado, activa, ultimoMes',
+    // Recurrentes: transacciones recurrentes con frecuencias variables
+    // frecuencia: 'mensual', 'bimestral', 'trimestral', 'semestral', 'anual', 'personalizado'
+    // fechaProximoPago: próxima fecha de cobro (YYYY-MM-DD)
+    // monto: monto del pago (no mensual estimado, sino el monto real del pago)
+    recurrentes: '++id, nombre, categoria, perfilId, monto, frecuencia, fechaProximoPago, activa',
 
     // Historial de recurrentes: registro de montos reales por mes
     historialRecurrentes: '++id, recurrenteId, mesAnio, monto, fecha',
@@ -442,13 +458,21 @@ db.version(9).stores({
     // Si es cuotas: transaccionOrigenId apunta a la primera cuota, cuotasTotal indica el total
     reembolsos: '++id, transaccionOrigenId, nombreDeudor, estado, tipoCompra, cuotasTotal, fechaCreacion, fechaSolicitud, fechaPago'
 }).upgrade(tx => {
-    // Migración: agregar campos nuevos a transacciones existentes
-    return tx.table('transacciones').toCollection().modify(transaccion => {
-        if (transaccion.esReembolsable === undefined) {
-            transaccion.esReembolsable = false;
+    // Migración de versión 9 a 10: actualizar recurrentes con nuevos campos
+    return tx.table('recurrentes').toCollection().modify(recurrente => {
+        // Si no tiene frecuencia, asignar 'mensual' por defecto
+        if (!recurrente.frecuencia) {
+            recurrente.frecuencia = 'mensual';
         }
-        if (transaccion.reembolsoId === undefined) {
-            transaccion.reembolsoId = null;
+        // Si no tiene fechaProximoPago, calcular del primer día del próximo mes
+        if (!recurrente.fechaProximoPago) {
+            const hoy = new Date();
+            const proximoMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1);
+            recurrente.fechaProximoPago = proximoMes.toISOString().split('T')[0];
+        }
+        // Migrar montoEstimado a monto si existe
+        if (recurrente.montoEstimado !== undefined && !recurrente.monto) {
+            recurrente.monto = recurrente.montoEstimado;
         }
     });
 });
@@ -3867,6 +3891,21 @@ const Login = () => {
 const Sidebar = () => {
     const { currentPage, setCurrentPage, isSidebarOpen, setIsSidebarOpen, isDarkMode, setIsDarkMode } = useApp();
 
+    // Estado para grupos colapsados - todos colapsados por defecto
+    const [collapsedGroups, setCollapsedGroups] = useState(() => {
+        const saved = localStorage.getItem('collapsedGroups');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+        // Inicializar todos los grupos como colapsados
+        return {
+            transacciones: true,
+            analisis: true,
+            configuracion: true,
+            herramientas: true
+        };
+    });
+
     // Logo SVG inline con soporte para modo claro/oscuro
     const LogoFinzi = ({ className = "" }) => (
         <svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -3898,20 +3937,67 @@ const Sidebar = () => {
         </svg>
     );
 
+    // Toggle de grupo colapsable
+    const toggleGroup = (groupId) => {
+        const newCollapsed = {
+            ...collapsedGroups,
+            [groupId]: !collapsedGroups[groupId]
+        };
+        setCollapsedGroups(newCollapsed);
+        localStorage.setItem('collapsedGroups', JSON.stringify(newCollapsed));
+    };
+
     const menuItems = [
-        { id: 'home', icon: '🏠', label: 'Home', description: 'Dashboard principal' },
-        { id: 'ingresos', icon: '💵', label: 'Ingresos', description: 'Registrar ingresos' },
-        { id: 'reembolsos', icon: '💸', label: 'Reembolsos', description: 'Gastos a reembolsar' },
-        { id: 'proyecciones', icon: '🎯', label: 'Proyecciones', description: 'Metas y ahorro' },
-        { id: 'analisis', icon: '📈', label: 'Análisis Cierre', description: 'Proyección e insights' },
-        { id: 'historial', icon: '📅', label: 'Historial', description: 'Gestión de meses' },
-        { id: 'balance', icon: '💰', label: 'Balance', description: 'Liquidación de deudas' },
-        { id: 'perfiles', icon: '👥', label: 'Perfiles', description: 'Gestionar usuarios' },
-        { id: 'categorias', icon: '🏷️', label: 'Categorías', description: 'Gestionar categorías' },
-        { id: 'presupuestos', icon: '💸', label: 'Presupuestos', description: 'Configurar límites' },
-        { id: 'cuotasFuturas', icon: '💳', label: 'Cuotas Futuras', description: 'Proyección de pagos' },
-        { id: 'recurrentes', icon: '🔄', label: 'Recurrentes', description: 'Gastos mensuales' },
-        { id: 'simulador', icon: '🧮', label: 'Simulador', description: 'Análisis de compras' }
+        {
+            id: 'home',
+            icon: '🏠',
+            label: 'Home',
+            type: 'single'
+        },
+        {
+            id: 'transacciones',
+            icon: '💰',
+            label: 'Transacciones',
+            type: 'group',
+            items: [
+                { id: 'ingresos', icon: '💵', label: 'Ingresos' },
+                { id: 'reembolsos', icon: '💸', label: 'Reembolsos' },
+                { id: 'recurrentes', icon: '🔄', label: 'Recurrentes' }
+            ]
+        },
+        {
+            id: 'analisis',
+            icon: '📊',
+            label: 'Análisis',
+            type: 'group',
+            items: [
+                { id: 'analisis', icon: '📈', label: 'Análisis Cierre' },
+                { id: 'historial', icon: '📅', label: 'Historial' },
+                { id: 'balance', icon: '💰', label: 'Balance' },
+                { id: 'proyecciones', icon: '🎯', label: 'Proyecciones' }
+            ]
+        },
+        {
+            id: 'configuracion',
+            icon: '⚙️',
+            label: 'Configuración',
+            type: 'group',
+            items: [
+                { id: 'perfiles', icon: '👥', label: 'Perfiles' },
+                { id: 'categorias', icon: '🏷️', label: 'Categorías' },
+                { id: 'presupuestos', icon: '💸', label: 'Presupuestos' }
+            ]
+        },
+        {
+            id: 'herramientas',
+            icon: '📈',
+            label: 'Proyecciones',
+            type: 'group',
+            items: [
+                { id: 'cuotasFuturas', icon: '💳', label: 'Cuotas Futuras' },
+                { id: 'simulador', icon: '🧮', label: 'Simulador' }
+            ]
+        }
     ];
 
     return (
@@ -3991,59 +4077,133 @@ const Sidebar = () => {
                     )}
                 </div>
 
-                {/* Menu Items minimalistas - Mobile optimizado */}
-                <nav className={`space-y-1 lg:space-y-2 overflow-y-auto flex-1 ${isSidebarOpen ? 'p-2 lg:p-4' : 'p-1'}`} style={{ maxHeight: 'calc(100vh - 200px)' }}>
-                    {menuItems.map((item, index) => {
-                        const isActive = currentPage === item.id;
+                {/* Menu Items con grupos colapsables */}
+                <nav className={`space-y-1 overflow-y-auto flex-1 ${isSidebarOpen ? 'p-2 lg:p-4' : 'p-1'}`} style={{ maxHeight: 'calc(100vh - 200px)' }}>
+                    {menuItems.map((item) => {
+                        if (item.type === 'single') {
+                            // Item simple (Home)
+                            const isActive = currentPage === item.id;
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => {
+                                        setCurrentPage(item.id);
+                                        if (window.innerWidth < 1024) {
+                                            setIsSidebarOpen(false);
+                                        }
+                                    }}
+                                    className={`w-full flex items-center rounded-lg lg:rounded-xl transition-all duration-300 group relative ${
+                                        isSidebarOpen ? 'space-x-2 lg:space-x-3 px-3 lg:px-4 py-2 lg:py-3' : 'justify-center py-3 px-2'
+                                    } ${
+                                        isActive
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                                            : 'hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                    title={!isSidebarOpen ? item.label : ''}
+                                >
+                                    {isActive && (
+                                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 lg:h-8 bg-indigo-600 rounded-r-full" />
+                                    )}
+                                    <span className="text-xl lg:text-2xl flex-shrink-0 transition-transform group-hover:scale-110">
+                                        {item.icon}
+                                    </span>
+                                    {isSidebarOpen && (
+                                        <div className="flex-1 text-left min-w-0">
+                                            <p className={`font-bold text-xs lg:text-sm truncate ${
+                                                isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
+                                            }`}>
+                                                {item.label}
+                                            </p>
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        }
+
+                        // Item de grupo con subitems
+                        const isCollapsed = collapsedGroups[item.id];
+                        const hasActiveChild = item.items.some(subItem => currentPage === subItem.id);
 
                         return (
-                            <button
-                                key={item.id}
-                                onClick={() => {
-                                    setCurrentPage(item.id);
-                                    // Cerrar sidebar en mobile después de seleccionar
-                                    if (window.innerWidth < 1024) {
-                                        setIsSidebarOpen(false);
-                                    }
-                                }}
-                                className={`w-full flex items-center rounded-lg lg:rounded-xl transition-all duration-300 group relative ${
-                                    isSidebarOpen ? 'space-x-2 lg:space-x-3 px-3 lg:px-4 py-2 lg:py-3' : 'justify-center py-3 px-2'
-                                } ${
-                                    isActive
-                                        ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                                        : 'hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
-                                }`}
-                                title={!isSidebarOpen ? item.label : ''}
-                            >
-                                {/* Barra lateral para item activo */}
-                                {isActive && (
-                                    <div
-                                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 lg:h-8 bg-indigo-600 rounded-r-full"
-                                    />
-                                )}
-
-                                {/* Icono - más pequeño en mobile */}
-                                <span
-                                    className="text-xl lg:text-2xl flex-shrink-0 transition-transform group-hover:scale-110"
+                            <div key={item.id} className="space-y-1">
+                                {/* Header del grupo */}
+                                <button
+                                    onClick={() => {
+                                        if (isSidebarOpen) {
+                                            toggleGroup(item.id);
+                                        }
+                                    }}
+                                    className={`w-full flex items-center rounded-lg lg:rounded-xl transition-all duration-300 group relative ${
+                                        isSidebarOpen ? 'space-x-2 lg:space-x-3 px-3 lg:px-4 py-2 lg:py-3' : 'justify-center py-3 px-2'
+                                    } ${
+                                        hasActiveChild
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                                            : 'hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                    title={!isSidebarOpen ? item.label : ''}
                                 >
-                                    {item.icon}
-                                </span>
+                                    <span className="text-xl lg:text-2xl flex-shrink-0 transition-transform group-hover:scale-110">
+                                        {item.icon}
+                                    </span>
+                                    {isSidebarOpen && (
+                                        <>
+                                            <div className="flex-1 text-left min-w-0">
+                                                <p className={`font-bold text-xs lg:text-sm truncate ${
+                                                    hasActiveChild ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
+                                                }`}>
+                                                    {item.label}
+                                                </p>
+                                            </div>
+                                            {/* Chevron */}
+                                            <svg
+                                                className={`w-4 h-4 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`}
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </>
+                                    )}
+                                </button>
 
-                                {isSidebarOpen && (
-                                    <div className="flex-1 text-left min-w-0">
-                                        <p className={`font-bold text-xs lg:text-sm truncate ${
-                                            isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
-                                        }`}>
-                                            {item.label}
-                                        </p>
-                                        <p className={`text-xs hidden lg:block ${
-                                            isActive ? 'text-indigo-400 dark:text-indigo-500' : 'text-gray-500 dark:text-gray-400'
-                                        }`}>
-                                            {item.description}
-                                        </p>
+                                {/* Subitems */}
+                                {isSidebarOpen && !isCollapsed && (
+                                    <div className="space-y-0.5 ml-2 lg:ml-3">
+                                        {item.items.map((subItem) => {
+                                            const isActive = currentPage === subItem.id;
+                                            return (
+                                                <button
+                                                    key={subItem.id}
+                                                    onClick={() => {
+                                                        setCurrentPage(subItem.id);
+                                                        if (window.innerWidth < 1024) {
+                                                            setIsSidebarOpen(false);
+                                                        }
+                                                    }}
+                                                    className={`w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg transition-all duration-200 group relative ${
+                                                        isActive
+                                                            ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                                                            : 'hover:bg-gray-100 dark:hover:bg-slate-700/50 text-gray-600 dark:text-gray-400'
+                                                    }`}
+                                                >
+                                                    {isActive && (
+                                                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-indigo-600 rounded-r-full" />
+                                                    )}
+                                                    <span className="text-base lg:text-lg flex-shrink-0">
+                                                        {subItem.icon}
+                                                    </span>
+                                                    <p className={`text-xs lg:text-sm font-medium truncate ${
+                                                        isActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-400'
+                                                    }`}>
+                                                        {subItem.label}
+                                                    </p>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
-                            </button>
+                            </div>
                         );
                     })}
                 </nav>
@@ -4451,7 +4611,7 @@ const Home = () => {
             {/* Header con selector de mes y botón cargar */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Dashboard de Gastos</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard de Gastos</h1>
                     <p className="text-gray-600">Análisis detallado de tus transacciones</p>
                 </div>
                 <button
@@ -4975,7 +5135,7 @@ const ListaTransacciones = memo(({ transacciones, perfiles, categorias, onEditar
                             {/* Información principal */}
                             <div className="flex-1">
                                 <div className="flex items-center space-x-2">
-                                    <p className="font-semibold text-gray-800">{t.comercio}</p>
+                                    <p className="font-semibold text-gray-800 dark:text-white">{t.comercio}</p>
                                     {t.cuotaActual && (
                                         <Badge color="blue" size="sm">
                                             {t.cuotaActual}/{t.cuotasTotal}
@@ -5002,7 +5162,7 @@ const ListaTransacciones = memo(({ transacciones, perfiles, categorias, onEditar
 
                             {/* Monto */}
                             <div className="text-right">
-                                <p className="text-xl font-bold text-gray-800">{formatearMonto(t.monto)}</p>
+                                <p className="text-xl font-bold text-gray-800 dark:text-white">{formatearMonto(t.monto)}</p>
                             </div>
                         </div>
 
@@ -5076,7 +5236,7 @@ const BalanceCompartido = memo(({ transacciones, perfiles }) => {
                                 className="w-3 h-3 rounded-full"
                                 style={{ backgroundColor: perfiles[0].color }}
                             />
-                            <p className="font-semibold text-gray-800">{perfiles[0].nombre}</p>
+                            <p className="font-semibold text-gray-800 dark:text-white">{perfiles[0].nombre}</p>
                         </div>
                         <div className="space-y-1 text-sm">
                             <div className="flex justify-between">
@@ -5096,7 +5256,7 @@ const BalanceCompartido = memo(({ transacciones, perfiles }) => {
                                     className="w-3 h-3 rounded-full"
                                     style={{ backgroundColor: perfiles[1].color }}
                                 />
-                                <p className="font-semibold text-gray-800">{perfiles[1].nombre}</p>
+                                <p className="font-semibold text-gray-800 dark:text-white">{perfiles[1].nombre}</p>
                             </div>
                             <div className="space-y-1 text-sm">
                                 <div className="flex justify-between">
@@ -5190,15 +5350,15 @@ const CardDisponible = memo(({ disponible, categorias }) => {
                 <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-300">
                     <div className="text-center">
                         <p className="text-xs text-gray-600 mb-1">Presupuesto</p>
-                        <p className="text-lg font-bold text-gray-800">{formatearMonto(presupuestoTotal)}</p>
+                        <p className="text-lg font-bold text-gray-800 dark:text-white">{formatearMonto(presupuestoTotal)}</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xs text-gray-600 mb-1">Gastado</p>
-                        <p className="text-lg font-bold text-gray-800">-{formatearMonto(gastadoTotal)}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Gastado</p>
+                        <p className="text-lg font-bold text-gray-800 dark:text-white">-{formatearMonto(gastadoTotal)}</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xs text-gray-600 mb-1">Cuotas Futuras</p>
-                        <p className="text-lg font-bold text-gray-800">-{formatearMonto(cuotasProyectadas)}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Cuotas Futuras</p>
+                        <p className="text-lg font-bold text-gray-800 dark:text-white">-{formatearMonto(cuotasProyectadas)}</p>
                     </div>
                 </div>
 
@@ -5861,7 +6021,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                 >
                                     <div className="text-center">
                                         <span className="text-xl sm:text-3xl block mb-1 sm:mb-2">⚡</span>
-                                        <p className="font-semibold text-gray-800 text-xs sm:text-base">Auto</p>
+                                        <p className="font-semibold text-gray-800 dark:text-white text-xs sm:text-base">Auto</p>
                                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">
                                             Carga rápida con categorización automática.
                                         </p>
@@ -5878,7 +6038,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                 >
                                     <div className="text-center">
                                         <span className="text-xl sm:text-3xl block mb-1 sm:mb-2">👁️</span>
-                                        <p className="font-semibold text-gray-800 text-xs sm:text-base">Manual</p>
+                                        <p className="font-semibold text-gray-800 dark:text-white text-xs sm:text-base">Manual</p>
                                         <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">
                                             Revisa cada transacción una por una.
                                         </p>
@@ -6697,7 +6857,7 @@ const AnalisisCierre = () => {
         return (
             <div className="max-w-7xl mx-auto space-y-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">📊 Análisis de Cierre</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">📊 Análisis de Cierre</h1>
                     <p className="text-gray-600">Proyecciones e insights de tus gastos</p>
                 </div>
                 <EmptyState
@@ -6713,7 +6873,7 @@ const AnalisisCierre = () => {
         return (
             <div className="max-w-7xl mx-auto space-y-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">📊 Análisis de Cierre</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">📊 Análisis de Cierre</h1>
                     <p className="text-gray-600">Proyecciones e insights de tus gastos</p>
                 </div>
                 <div className="flex items-center justify-center py-20">
@@ -7159,7 +7319,7 @@ const HistorialMeses = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Historial de Meses</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Historial de Meses</h1>
                 <p className="text-gray-600">Gestiona los meses con datos cargados</p>
             </div>
 
@@ -7410,7 +7570,7 @@ const Balance = () => {
         return (
             <div className="max-w-7xl mx-auto space-y-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">💰 Balance del Mes</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">💰 Balance del Mes</h1>
                     <p className="text-gray-600">Liquidación de gastos compartidos</p>
                 </div>
                 <EmptyState
@@ -7426,7 +7586,7 @@ const Balance = () => {
         return (
             <div className="max-w-7xl mx-auto space-y-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">💰 Balance del Mes</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">💰 Balance del Mes</h1>
                     <p className="text-gray-600">Liquidación de gastos compartidos</p>
                 </div>
                 <div className="flex items-center justify-center py-20">
@@ -7718,7 +7878,7 @@ const Perfiles = () => {
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Gestión de Perfiles</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Perfiles</h1>
                     <p className="text-gray-600">Administra los perfiles de usuario</p>
                 </div>
                 <button
@@ -7929,7 +8089,7 @@ const Categorias = () => {
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Gestión de Categorías</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Categorías</h1>
                     <p className="text-gray-600">Personaliza las categorías de gastos</p>
                 </div>
                 <button onClick={() => { setCategoriaEditar(null); setShowModal(true); }} className="px-6 py-3 bg-white text-indigo-600 font-semibold rounded-lg hover:bg-indigo-50 transition-colors shadow-lg">
@@ -8088,7 +8248,7 @@ const Presupuestos = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Configuración de Presupuestos</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Configuración de Presupuestos</h1>
                 <p className="text-gray-600">Define los límites de gasto por categoría</p>
             </div>
 
@@ -8294,7 +8454,7 @@ const CuotasFuturas = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">💳 Cuotas Futuras</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">💳 Cuotas Futuras</h1>
                     <p className="text-gray-600">Proyección de pagos en cuotas para los próximos meses</p>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -8635,8 +8795,8 @@ const Recurrentes = () => {
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Gastos Recurrentes</h1>
-                    <p className="text-gray-600">Gestiona tus gastos mensuales fijos</p>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gastos Recurrentes</h1>
+                    <p className="text-gray-600 dark:text-gray-400">Gestiona gastos mensuales, anuales, semestrales y más</p>
                 </div>
                 <button onClick={() => { setRecurrenteEditar(null); setShowModal(true); }} className="px-6 py-3 bg-white text-indigo-600 font-semibold rounded-lg hover:bg-indigo-50 transition-colors shadow-lg">
                     + Nueva Recurrente
@@ -8656,20 +8816,65 @@ const Recurrentes = () => {
                             const categoria = categorias.find(c => c.id === rec.categoria);
                             const perfil = perfiles.find(p => p.id === rec.perfilId);
 
+                            // Calcular info de próximo pago
+                            const fechaPago = new Date(rec.fechaProximoPago + 'T00:00:00');
+                            const hoy = new Date();
+                            const diasHasta = Math.ceil((fechaPago - hoy) / (1000 * 60 * 60 * 24));
+
+                            const getFrecuenciaLabel = (frec) => {
+                                const labels = {
+                                    'mensual': 'Mensual',
+                                    'bimestral': 'Bimestral',
+                                    'trimestral': 'Trimestral',
+                                    'semestral': 'Semestral',
+                                    'anual': 'Anual'
+                                };
+                                return labels[frec] || frec;
+                            };
+
+                            const getMesesFrecuencia = (frec) => {
+                                const meses = {
+                                    'mensual': 1,
+                                    'bimestral': 2,
+                                    'trimestral': 3,
+                                    'semestral': 6,
+                                    'anual': 12
+                                };
+                                return meses[frec] || 1;
+                            };
+
+                            const montoMensual = rec.monto / getMesesFrecuencia(rec.frecuencia || 'mensual');
+                            const urgencia = diasHasta <= 7 ? 'urgent' : diasHasta <= 30 ? 'soon' : 'later';
+
                             return (
-                                <div key={rec.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                <div key={rec.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-slate-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
                                     <div className="flex items-center space-x-4 flex-1">
                                         <span className="text-3xl">{categoria?.icono || '🔄'}</span>
-                                        <div className="flex-1">
-                                            <div className="flex items-center space-x-2">
-                                                <h3 className="font-semibold text-gray-800">{rec.nombre}</h3>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center space-x-2 flex-wrap">
+                                                <h3 className="font-semibold text-gray-800 dark:text-white">{rec.nombre}</h3>
                                                 {!rec.activa && <Badge color="gray" size="sm">Inactiva</Badge>}
+                                                <Badge color={urgencia === 'urgent' ? 'red' : urgencia === 'soon' ? 'yellow' : 'blue'} size="sm">
+                                                    {getFrecuenciaLabel(rec.frecuencia)}
+                                                </Badge>
                                             </div>
-                                            <p className="text-sm text-gray-600">{categoria?.nombre} • {perfil?.nombre}</p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400">{categoria?.nombre} • {perfil?.nombre}</p>
+                                            <p className={`text-xs font-medium mt-1 ${
+                                                urgencia === 'urgent' ? 'text-red-600 dark:text-red-400' :
+                                                urgencia === 'soon' ? 'text-yellow-600 dark:text-yellow-400' :
+                                                'text-blue-600 dark:text-blue-400'
+                                            }`}>
+                                                {diasHasta < 0 ? `Vencido hace ${Math.abs(diasHasta)} días` :
+                                                 diasHasta === 0 ? 'Vence hoy' :
+                                                 diasHasta === 1 ? 'Vence mañana' :
+                                                 `Próximo pago: ${fechaPago.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}`}
+                                            </p>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-lg font-bold text-gray-800">{formatearMonto(rec.montoEstimado)}</p>
-                                            <p className="text-xs text-gray-500">Estimado/mes</p>
+                                        <div className="text-right flex-shrink-0">
+                                            <p className="text-lg font-bold text-gray-800 dark:text-white">{formatearMonto(rec.monto)}</p>
+                                            {rec.frecuencia !== 'mensual' && (
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">≈ {formatearMonto(montoMensual)}/mes</p>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-2 ml-4">
@@ -8701,35 +8906,128 @@ const ModalRecurrente = ({ recurrente, perfiles, categorias, onClose, onGuardar 
         nombre: recurrente?.nombre || '',
         categoria: recurrente?.categoria || categorias[0]?.id,
         perfilId: recurrente?.perfilId || perfiles[0]?.id,
-        montoEstimado: recurrente?.montoEstimado || 0
+        monto: recurrente?.monto || recurrente?.montoEstimado || 0,
+        frecuencia: recurrente?.frecuencia || 'mensual',
+        fechaProximoPago: recurrente?.fechaProximoPago || new Date().toISOString().split('T')[0]
     });
+
+    const frecuencias = [
+        { value: 'mensual', label: 'Mensual', meses: 1 },
+        { value: 'bimestral', label: 'Bimestral (cada 2 meses)', meses: 2 },
+        { value: 'trimestral', label: 'Trimestral (cada 3 meses)', meses: 3 },
+        { value: 'semestral', label: 'Semestral (cada 6 meses)', meses: 6 },
+        { value: 'anual', label: 'Anual (cada 12 meses)', meses: 12 }
+    ];
+
+    const getMesesFrecuencia = (frec) => {
+        const f = frecuencias.find(f => f.value === frec);
+        return f ? f.meses : 1;
+    };
+
+    const calcularMontoMensual = () => {
+        const meses = getMesesFrecuencia(form.frecuencia);
+        return meses > 0 ? (form.monto / meses).toFixed(0) : 0;
+    };
 
     return (
         <Modal isOpen={true} onClose={onClose} title={recurrente ? 'Editar Recurrente' : 'Nueva Recurrente'} size="md">
             <form onSubmit={(e) => { e.preventDefault(); onGuardar(form); }} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-                    <input type="text" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="Ej: Netflix, Luz, Agua" required />
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre</label>
+                    <input
+                        type="text"
+                        value={form.nombre}
+                        onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Ej: Netflix, Seguro Auto, Spotify"
+                        required
+                    />
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoría</label>
+                        <select
+                            value={form.categoria}
+                            onChange={(e) => setForm({ ...form, categoria: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            required
+                        >
+                            {categorias.map(c => <option key={c.id} value={c.id}>{c.icono} {c.nombre}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Perfil</label>
+                        <select
+                            value={form.perfilId}
+                            onChange={(e) => setForm({ ...form, perfilId: parseInt(e.target.value) })}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            required
+                        >
+                            {perfiles.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                        </select>
+                    </div>
+                </div>
+
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-                    <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
-                        {categorias.map(c => <option key={c.id} value={c.id}>{c.icono} {c.nombre}</option>)}
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Frecuencia de pago</label>
+                    <select
+                        value={form.frecuencia}
+                        onChange={(e) => setForm({ ...form, frecuencia: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        required
+                    >
+                        {frecuencias.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                     </select>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Perfil</label>
-                    <select value={form.perfilId} onChange={(e) => setForm({ ...form, perfilId: parseInt(e.target.value) })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required>
-                        {perfiles.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monto del pago</label>
+                        <input
+                            type="number"
+                            value={form.monto}
+                            onChange={(e) => setForm({ ...form, monto: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            required
+                            min="0"
+                            step="100"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Próximo pago</label>
+                        <input
+                            type="date"
+                            value={form.fechaProximoPago}
+                            onChange={(e) => setForm({ ...form, fechaProximoPago: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-indigo-500"
+                            required
+                        />
+                    </div>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Monto Estimado Mensual</label>
-                    <input type="number" value={form.montoEstimado} onChange={(e) => setForm({ ...form, montoEstimado: parseFloat(e.target.value) || 0 })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required min="0" step="100" />
-                </div>
+
+                {form.frecuencia !== 'mensual' && (
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3">
+                        <p className="text-sm text-indigo-700 dark:text-indigo-300">
+                            💡 Impacto mensual promedio: <span className="font-bold">{formatearMonto(calcularMontoMensual())}</span>
+                        </p>
+                    </div>
+                )}
+
                 <div className="flex space-x-3 pt-4">
-                    <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
-                    <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">{recurrente ? 'Actualizar' : 'Crear'}</button>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="flex-1 px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="submit"
+                        className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold"
+                    >
+                        {recurrente ? 'Actualizar' : 'Crear'}
+                    </button>
                 </div>
             </form>
         </Modal>
@@ -8822,7 +9120,7 @@ const Simulador = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Simulador de Compras</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Simulador de Compras</h1>
                 <p className="text-gray-600">Analiza el impacto de una nueva compra en tu presupuesto</p>
             </div>
 
@@ -9135,7 +9433,7 @@ const Ingresos = () => {
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Ingresos del Mes</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Ingresos del Mes</h1>
                     <p className="text-gray-600">{getNombreMes(selectedMonth.mesAnio)}</p>
                 </div>
                 <button
@@ -10019,7 +10317,7 @@ const Proyecciones = () => {
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Proyecciones Financieras</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Proyecciones Financieras</h1>
                     <p className="text-gray-600">Planifica tu futuro y alcanza tus metas</p>
                 </div>
                 <button
@@ -10293,6 +10591,224 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
 
     </script>
 
+    <script type="text/babel">
+        // Tour Guiado de Bienvenida - Finzi v3.3
+
+const TourGuide = () => {
+    const { setCurrentPage } = useApp();
+    const [showTour, setShowTour] = useState(false);
+    const [currentStep, setCurrentStep] = useState(0);
+
+    useEffect(() => {
+        // Verificar si el usuario ya vio el tour
+        const tourCompleted = localStorage.getItem('tourCompleted');
+        if (!tourCompleted) {
+            // Esperar un momento antes de mostrar el tour
+            setTimeout(() => setShowTour(true), 1000);
+        }
+    }, []);
+
+    // Navegación con teclado
+    useEffect(() => {
+        if (!showTour) return;
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                handleNext();
+            } else if (e.key === 'ArrowLeft') {
+                handlePrev();
+            } else if (e.key === 'Escape') {
+                handleSkip();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showTour, currentStep]);
+
+    const steps = [
+        {
+            title: "¡Bienvenido a Finzi! 🎉",
+            content: "Tu analizador inteligente de gastos de tarjeta de crédito. Te guiaré por las funcionalidades principales en unos segundos.",
+            target: null,
+            action: null
+        },
+        {
+            title: "Dashboard Principal 🏠",
+            content: "Aquí verás el resumen de tus gastos del mes: transacciones, presupuestos, balance y estadísticas clave.",
+            target: "home",
+            action: () => setCurrentPage('home')
+        },
+        {
+            title: "Cargar CSV 📄",
+            content: "El primer paso es cargar el CSV de tu tarjeta. Puedes seleccionar mes/año, asignar perfil y elegir entre categorización automática o manual.",
+            target: "home",
+            action: null
+        },
+        {
+            title: "Transacciones 💰",
+            content: "Gestiona tus ingresos mensuales, gastos a reembolsar y gastos recurrentes (Netflix, seguros anuales, etc.).",
+            target: "transacciones",
+            action: null
+        },
+        {
+            title: "Análisis 📊",
+            content: "Visualiza análisis detallados, historial de meses, balance entre perfiles y proyecciones de ahorro.",
+            target: "analisis",
+            action: null
+        },
+        {
+            title: "Configuración ⚙️",
+            content: "Configura perfiles (quién usa cada tarjeta), categorías personalizadas y presupuestos mensuales por categoría.",
+            target: "configuracion",
+            action: null
+        },
+        {
+            title: "Herramientas Avanzadas 📈",
+            content: "Proyecta cuotas futuras y simula el impacto de compras grandes en tu presupuesto antes de hacerlas.",
+            target: "herramientas",
+            action: null
+        },
+        {
+            title: "Sincronización Firebase ☁️",
+            content: "Tus datos se sincronizan automáticamente con Firebase. Accede desde cualquier dispositivo con tu cuenta de Google.",
+            target: null,
+            action: null
+        },
+        {
+            title: "¡Listo para empezar! 🚀",
+            content: "Ya conoces lo básico. Empieza cargando tu primer CSV o explora las configuraciones. ¡Que tengas un excelente control de tus finanzas!",
+            target: null,
+            action: null
+        }
+    ];
+
+    const handleNext = () => {
+        if (currentStep < steps.length - 1) {
+            const nextStep = currentStep + 1;
+            const step = steps[nextStep];
+            if (step.action) step.action();
+            setCurrentStep(nextStep);
+        } else {
+            completeTour();
+        }
+    };
+
+    const handlePrev = () => {
+        if (currentStep > 0) {
+            const prevStep = currentStep - 1;
+            const step = steps[prevStep];
+            if (step.action) step.action();
+            setCurrentStep(prevStep);
+        }
+    };
+
+    const handleSkip = () => {
+        completeTour();
+    };
+
+    const completeTour = () => {
+        localStorage.setItem('tourCompleted', 'true');
+        setShowTour(false);
+    };
+
+    if (!showTour) return null;
+
+    const step = steps[currentStep];
+    const isFirst = currentStep === 0;
+    const isLast = currentStep === steps.length - 1;
+
+    return (
+        <>
+            {/* Overlay */}
+            <div className="fixed inset-0 bg-black bg-opacity-60 z-[60] animate-fadeIn" />
+
+            {/* Modal del tour */}
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 pointer-events-auto animate-slideIn border-2 border-indigo-500">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center">
+                                <span className="text-white text-xl">
+                                    {isFirst ? '👋' : isLast ? '🎉' : '💡'}
+                                </span>
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                    {step.title}
+                                </h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Paso {currentStep + 1} de {steps.length}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleSkip}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-2"
+                            aria-label="Saltar tour"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="w-full h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full mb-4 overflow-hidden">
+                        <div
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300"
+                            style={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+                        />
+                    </div>
+
+                    {/* Content */}
+                    <div className="mb-6">
+                        <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                            {step.content}
+                        </p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-between">
+                        <button
+                            onClick={handleSkip}
+                            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                        >
+                            Saltar tour
+                        </button>
+                        <div className="flex space-x-2">
+                            {!isFirst && (
+                                <button
+                                    onClick={handlePrev}
+                                    className="px-4 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    Anterior
+                                </button>
+                            )}
+                            <button
+                                onClick={handleNext}
+                                className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg font-semibold"
+                            >
+                                {isLast ? '¡Empezar!' : 'Siguiente'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Indicador de teclas */}
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                            💡 Tip: Usa las flechas ← → del teclado para navegar
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
+
+    </script>
+
     <!-- APP PRINCIPAL -->
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback, useContext, createContext, useRef } = React;
@@ -10533,6 +11049,8 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
                                 {currentPage === 'simulador' && <Simulador />}
                             </div>
                         </main>
+                        {/* Tour Guiado de Bienvenida */}
+                        <TourGuide />
                     </div>
                 </AppContext.Provider>
             );

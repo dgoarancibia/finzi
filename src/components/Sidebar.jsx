@@ -3,6 +3,21 @@
 const Sidebar = () => {
     const { currentPage, setCurrentPage, isSidebarOpen, setIsSidebarOpen, isDarkMode, setIsDarkMode } = useApp();
 
+    // Estado para grupos colapsados - todos colapsados por defecto
+    const [collapsedGroups, setCollapsedGroups] = useState(() => {
+        const saved = localStorage.getItem('collapsedGroups');
+        if (saved) {
+            return JSON.parse(saved);
+        }
+        // Inicializar todos los grupos como colapsados
+        return {
+            transacciones: true,
+            analisis: true,
+            configuracion: true,
+            herramientas: true
+        };
+    });
+
     // Logo SVG inline con soporte para modo claro/oscuro
     const LogoFinzi = ({ className = "" }) => (
         <svg width="120" height="40" viewBox="0 0 120 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -34,20 +49,67 @@ const Sidebar = () => {
         </svg>
     );
 
+    // Toggle de grupo colapsable
+    const toggleGroup = (groupId) => {
+        const newCollapsed = {
+            ...collapsedGroups,
+            [groupId]: !collapsedGroups[groupId]
+        };
+        setCollapsedGroups(newCollapsed);
+        localStorage.setItem('collapsedGroups', JSON.stringify(newCollapsed));
+    };
+
     const menuItems = [
-        { id: 'home', icon: '🏠', label: 'Home', description: 'Dashboard principal' },
-        { id: 'ingresos', icon: '💵', label: 'Ingresos', description: 'Registrar ingresos' },
-        { id: 'reembolsos', icon: '💸', label: 'Reembolsos', description: 'Gastos a reembolsar' },
-        { id: 'proyecciones', icon: '🎯', label: 'Proyecciones', description: 'Metas y ahorro' },
-        { id: 'analisis', icon: '📈', label: 'Análisis Cierre', description: 'Proyección e insights' },
-        { id: 'historial', icon: '📅', label: 'Historial', description: 'Gestión de meses' },
-        { id: 'balance', icon: '💰', label: 'Balance', description: 'Liquidación de deudas' },
-        { id: 'perfiles', icon: '👥', label: 'Perfiles', description: 'Gestionar usuarios' },
-        { id: 'categorias', icon: '🏷️', label: 'Categorías', description: 'Gestionar categorías' },
-        { id: 'presupuestos', icon: '💸', label: 'Presupuestos', description: 'Configurar límites' },
-        { id: 'cuotasFuturas', icon: '💳', label: 'Cuotas Futuras', description: 'Proyección de pagos' },
-        { id: 'recurrentes', icon: '🔄', label: 'Recurrentes', description: 'Gastos mensuales' },
-        { id: 'simulador', icon: '🧮', label: 'Simulador', description: 'Análisis de compras' }
+        {
+            id: 'home',
+            icon: '🏠',
+            label: 'Home',
+            type: 'single'
+        },
+        {
+            id: 'transacciones',
+            icon: '💰',
+            label: 'Transacciones',
+            type: 'group',
+            items: [
+                { id: 'ingresos', icon: '💵', label: 'Ingresos' },
+                { id: 'reembolsos', icon: '💸', label: 'Reembolsos' },
+                { id: 'recurrentes', icon: '🔄', label: 'Recurrentes' }
+            ]
+        },
+        {
+            id: 'analisis',
+            icon: '📊',
+            label: 'Análisis',
+            type: 'group',
+            items: [
+                { id: 'analisis', icon: '📈', label: 'Análisis Cierre' },
+                { id: 'historial', icon: '📅', label: 'Historial' },
+                { id: 'balance', icon: '💰', label: 'Balance' },
+                { id: 'proyecciones', icon: '🎯', label: 'Proyecciones' }
+            ]
+        },
+        {
+            id: 'configuracion',
+            icon: '⚙️',
+            label: 'Configuración',
+            type: 'group',
+            items: [
+                { id: 'perfiles', icon: '👥', label: 'Perfiles' },
+                { id: 'categorias', icon: '🏷️', label: 'Categorías' },
+                { id: 'presupuestos', icon: '💸', label: 'Presupuestos' }
+            ]
+        },
+        {
+            id: 'herramientas',
+            icon: '📈',
+            label: 'Proyecciones',
+            type: 'group',
+            items: [
+                { id: 'cuotasFuturas', icon: '💳', label: 'Cuotas Futuras' },
+                { id: 'simulador', icon: '🧮', label: 'Simulador' }
+            ]
+        }
     ];
 
     return (
@@ -127,59 +189,133 @@ const Sidebar = () => {
                     )}
                 </div>
 
-                {/* Menu Items minimalistas - Mobile optimizado */}
-                <nav className={`space-y-1 lg:space-y-2 overflow-y-auto flex-1 ${isSidebarOpen ? 'p-2 lg:p-4' : 'p-1'}`} style={{ maxHeight: 'calc(100vh - 200px)' }}>
-                    {menuItems.map((item, index) => {
-                        const isActive = currentPage === item.id;
+                {/* Menu Items con grupos colapsables */}
+                <nav className={`space-y-1 overflow-y-auto flex-1 ${isSidebarOpen ? 'p-2 lg:p-4' : 'p-1'}`} style={{ maxHeight: 'calc(100vh - 200px)' }}>
+                    {menuItems.map((item) => {
+                        if (item.type === 'single') {
+                            // Item simple (Home)
+                            const isActive = currentPage === item.id;
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => {
+                                        setCurrentPage(item.id);
+                                        if (window.innerWidth < 1024) {
+                                            setIsSidebarOpen(false);
+                                        }
+                                    }}
+                                    className={`w-full flex items-center rounded-lg lg:rounded-xl transition-all duration-300 group relative ${
+                                        isSidebarOpen ? 'space-x-2 lg:space-x-3 px-3 lg:px-4 py-2 lg:py-3' : 'justify-center py-3 px-2'
+                                    } ${
+                                        isActive
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                                            : 'hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                    title={!isSidebarOpen ? item.label : ''}
+                                >
+                                    {isActive && (
+                                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 lg:h-8 bg-indigo-600 rounded-r-full" />
+                                    )}
+                                    <span className="text-xl lg:text-2xl flex-shrink-0 transition-transform group-hover:scale-110">
+                                        {item.icon}
+                                    </span>
+                                    {isSidebarOpen && (
+                                        <div className="flex-1 text-left min-w-0">
+                                            <p className={`font-bold text-xs lg:text-sm truncate ${
+                                                isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
+                                            }`}>
+                                                {item.label}
+                                            </p>
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        }
+
+                        // Item de grupo con subitems
+                        const isCollapsed = collapsedGroups[item.id];
+                        const hasActiveChild = item.items.some(subItem => currentPage === subItem.id);
 
                         return (
-                            <button
-                                key={item.id}
-                                onClick={() => {
-                                    setCurrentPage(item.id);
-                                    // Cerrar sidebar en mobile después de seleccionar
-                                    if (window.innerWidth < 1024) {
-                                        setIsSidebarOpen(false);
-                                    }
-                                }}
-                                className={`w-full flex items-center rounded-lg lg:rounded-xl transition-all duration-300 group relative ${
-                                    isSidebarOpen ? 'space-x-2 lg:space-x-3 px-3 lg:px-4 py-2 lg:py-3' : 'justify-center py-3 px-2'
-                                } ${
-                                    isActive
-                                        ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                                        : 'hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
-                                }`}
-                                title={!isSidebarOpen ? item.label : ''}
-                            >
-                                {/* Barra lateral para item activo */}
-                                {isActive && (
-                                    <div
-                                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 lg:h-8 bg-indigo-600 rounded-r-full"
-                                    />
-                                )}
-
-                                {/* Icono - más pequeño en mobile */}
-                                <span
-                                    className="text-xl lg:text-2xl flex-shrink-0 transition-transform group-hover:scale-110"
+                            <div key={item.id} className="space-y-1">
+                                {/* Header del grupo */}
+                                <button
+                                    onClick={() => {
+                                        if (isSidebarOpen) {
+                                            toggleGroup(item.id);
+                                        }
+                                    }}
+                                    className={`w-full flex items-center rounded-lg lg:rounded-xl transition-all duration-300 group relative ${
+                                        isSidebarOpen ? 'space-x-2 lg:space-x-3 px-3 lg:px-4 py-2 lg:py-3' : 'justify-center py-3 px-2'
+                                    } ${
+                                        hasActiveChild
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                                            : 'hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
+                                    }`}
+                                    title={!isSidebarOpen ? item.label : ''}
                                 >
-                                    {item.icon}
-                                </span>
+                                    <span className="text-xl lg:text-2xl flex-shrink-0 transition-transform group-hover:scale-110">
+                                        {item.icon}
+                                    </span>
+                                    {isSidebarOpen && (
+                                        <>
+                                            <div className="flex-1 text-left min-w-0">
+                                                <p className={`font-bold text-xs lg:text-sm truncate ${
+                                                    hasActiveChild ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
+                                                }`}>
+                                                    {item.label}
+                                                </p>
+                                            </div>
+                                            {/* Chevron */}
+                                            <svg
+                                                className={`w-4 h-4 transition-transform duration-200 ${isCollapsed ? '' : 'rotate-180'}`}
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </>
+                                    )}
+                                </button>
 
-                                {isSidebarOpen && (
-                                    <div className="flex-1 text-left min-w-0">
-                                        <p className={`font-bold text-xs lg:text-sm truncate ${
-                                            isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
-                                        }`}>
-                                            {item.label}
-                                        </p>
-                                        <p className={`text-xs hidden lg:block ${
-                                            isActive ? 'text-indigo-400 dark:text-indigo-500' : 'text-gray-500 dark:text-gray-400'
-                                        }`}>
-                                            {item.description}
-                                        </p>
+                                {/* Subitems */}
+                                {isSidebarOpen && !isCollapsed && (
+                                    <div className="space-y-0.5 ml-2 lg:ml-3">
+                                        {item.items.map((subItem) => {
+                                            const isActive = currentPage === subItem.id;
+                                            return (
+                                                <button
+                                                    key={subItem.id}
+                                                    onClick={() => {
+                                                        setCurrentPage(subItem.id);
+                                                        if (window.innerWidth < 1024) {
+                                                            setIsSidebarOpen(false);
+                                                        }
+                                                    }}
+                                                    className={`w-full flex items-center space-x-2 lg:space-x-3 px-3 lg:px-4 py-1.5 lg:py-2 rounded-lg transition-all duration-200 group relative ${
+                                                        isActive
+                                                            ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                                                            : 'hover:bg-gray-100 dark:hover:bg-slate-700/50 text-gray-600 dark:text-gray-400'
+                                                    }`}
+                                                >
+                                                    {isActive && (
+                                                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-indigo-600 rounded-r-full" />
+                                                    )}
+                                                    <span className="text-base lg:text-lg flex-shrink-0">
+                                                        {subItem.icon}
+                                                    </span>
+                                                    <p className={`text-xs lg:text-sm font-medium truncate ${
+                                                        isActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-400'
+                                                    }`}>
+                                                        {subItem.label}
+                                                    </p>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
-                            </button>
+                            </div>
                         );
                     })}
                 </nav>

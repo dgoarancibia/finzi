@@ -179,7 +179,7 @@ const Proyecciones = () => {
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Proyecciones Financieras</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Proyecciones Financieras</h1>
                     <p className="text-gray-600">Planifica tu futuro y alcanza tus metas</p>
                 </div>
                 <button

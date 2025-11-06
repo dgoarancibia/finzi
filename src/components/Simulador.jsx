@@ -81,7 +81,7 @@ const Simulador = () => {
     return (
         <div className="max-w-7xl mx-auto space-y-6">
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Simulador de Compras</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Simulador de Compras</h1>
                 <p className="text-gray-600">Analiza el impacto de una nueva compra en tu presupuesto</p>
             </div>
 

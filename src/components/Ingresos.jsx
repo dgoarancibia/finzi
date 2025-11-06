@@ -86,7 +86,7 @@ const Ingresos = () => {
         <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Ingresos del Mes</h1>
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Ingresos del Mes</h1>
                     <p className="text-gray-600">{getNombreMes(selectedMonth.mesAnio)}</p>
                 </div>
                 <button
