@@ -15,6 +15,8 @@ const Home = () => {
     const [showToast, setShowToast] = useState(null);
     const [showModalQuickAdd, setShowModalQuickAdd] = useState(false);
     const [showSelectorMeses, setShowSelectorMeses] = useState(false);
+    const [showMenuFAB, setShowMenuFAB] = useState(false);
+    const [showModalEntradaRapida, setShowModalEntradaRapida] = useState(false);
 
     // Cargar datos cuando cambian los meses seleccionados
     useEffect(() => {
@@ -613,16 +615,58 @@ const Home = () => {
                 />
             )}
 
-            {/* Botón flotante Quick Add */}
-            {selectedMonth && (
+            {/* Botón flotante con menú expandible (FAB) */}
+            <div className="fixed bottom-8 right-8 z-50">
+                {/* Overlay para cerrar el menú al hacer click fuera */}
+                {showMenuFAB && (
+                    <div
+                        className="fixed inset-0 -z-10"
+                        onClick={() => setShowMenuFAB(false)}
+                    />
+                )}
+
+                {/* Opciones del menú (se expanden hacia arriba) */}
+                {showMenuFAB && (
+                    <div className="absolute bottom-20 right-0 flex flex-col space-y-3 animate-slideIn">
+                        {/* Opción: Entrada Rápida */}
+                        <button
+                            onClick={() => {
+                                setShowModalEntradaRapida(true);
+                                setShowMenuFAB(false);
+                            }}
+                            className="flex items-center space-x-3 bg-white dark:bg-slate-800 text-gray-800 dark:text-white px-5 py-3 rounded-full shadow-xl hover:bg-indigo-50 dark:hover:bg-slate-700 transition-all transform hover:scale-105 whitespace-nowrap border-2 border-indigo-200 dark:border-indigo-800"
+                        >
+                            <span className="text-2xl">✍️</span>
+                            <span className="font-semibold">Entrada Rápida</span>
+                        </button>
+
+                        {/* Opción: Cargar CSV */}
+                        <button
+                            onClick={() => {
+                                setShowModalCargarCSV(true);
+                                setShowMenuFAB(false);
+                            }}
+                            className="flex items-center space-x-3 bg-white dark:bg-slate-800 text-gray-800 dark:text-white px-5 py-3 rounded-full shadow-xl hover:bg-green-50 dark:hover:bg-slate-700 transition-all transform hover:scale-105 whitespace-nowrap border-2 border-green-200 dark:border-green-800"
+                        >
+                            <span className="text-2xl">📄</span>
+                            <span className="font-semibold">Cargar CSV</span>
+                        </button>
+                    </div>
+                )}
+
+                {/* Botón principal */}
                 <button
-                    onClick={() => setShowModalQuickAdd(true)}
-                    className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl hover:bg-indigo-700 transition-all transform hover:scale-110 flex items-center justify-center text-3xl z-50"
-                    title="Agregar gasto rápido"
+                    onClick={() => setShowMenuFAB(!showMenuFAB)}
+                    className={`w-16 h-16 rounded-full shadow-2xl transition-all transform flex items-center justify-center text-3xl ${
+                        showMenuFAB
+                            ? 'bg-red-500 hover:bg-red-600 rotate-45'
+                            : 'bg-indigo-600 hover:bg-indigo-700 hover:scale-110'
+                    } text-white`}
+                    title={showMenuFAB ? 'Cerrar menú' : 'Agregar gasto'}
                 >
                     +
                 </button>
-            )}
+            </div>
 
             {/* Modal Quick Add */}
             {showModalQuickAdd && (
@@ -632,6 +676,18 @@ const Home = () => {
                         await cargarDatosDelMes();
                         setShowModalQuickAdd(false);
                         mostrarToast('Gasto agregado exitosamente', 'success');
+                    }}
+                />
+            )}
+
+            {/* Modal Entrada Rápida */}
+            {showModalEntradaRapida && (
+                <EntradaRapida
+                    onClose={() => setShowModalEntradaRapida(false)}
+                    onSuccess={async () => {
+                        await cargarDatosDeMeses();
+                        setShowModalEntradaRapida(false);
+                        mostrarToast('Gasto provisional agregado exitosamente 🟠', 'success');
                     }}
                 />
             )}

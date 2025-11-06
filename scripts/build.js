@@ -61,7 +61,8 @@ const archivos = [
     { path: 'components/Ingresos.jsx', marker: '/* INJECT:components/Ingresos.jsx */' },
     { path: 'components/Reembolsos.jsx', marker: '/* INJECT:components/Reembolsos.jsx */' },
     { path: 'components/Proyecciones.jsx', marker: '/* INJECT:components/Proyecciones.jsx */' },
-    { path: 'components/TourGuide.jsx', marker: '/* INJECT:components/TourGuide.jsx */' }
+    { path: 'components/TourGuide.jsx', marker: '/* INJECT:components/TourGuide.jsx */' },
+    { path: 'components/EntradaRapida.jsx', marker: '/* INJECT:components/EntradaRapida.jsx */' }
 ];
 
 // Inyectar archivos

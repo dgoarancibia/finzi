@@ -2,14 +2,15 @@
 window.db = new Dexie('GastosTCDatabase');
 
 // Definir el esquema de la base de datos
-db.version(10).stores({
+db.version(11).stores({
     // Meses cargados: registra cada mes con transacciones
     mesesCarga: '++id, mesAnio, fechaCarga',
 
     // Transacciones: todas las compras del CSV
     // Campos adicionales: esCompartido, porcentajePerfil, perfilCompartidoId
     // Campos de reembolso: esReembolsable, reembolsoId
-    transacciones: '++id, mesAnioId, perfilId, fecha, categoria, comercio, esCompartido, esReembolsable, reembolsoId',
+    // Campos v3.4 (Entrada Rápida): origen ('manual'|'csv'), estado ('provisional'|'confirmado'), textoOriginal, transaccionRelacionadaId
+    transacciones: '++id, mesAnioId, perfilId, fecha, categoria, comercio, esCompartido, esReembolsable, reembolsoId, origen, estado',
 
     // Presupuestos: límites por categoría por mes
     // esPlantilla: true para la plantilla base, false para meses específicos
@@ -54,6 +55,25 @@ db.version(10).stores({
         // Migrar montoEstimado a monto si existe
         if (recurrente.montoEstimado !== undefined && !recurrente.monto) {
             recurrente.monto = recurrente.montoEstimado;
+        }
+    });
+});
+
+// Migración de versión 10 a 11: agregar campos de entrada rápida
+db.version(11).upgrade(tx => {
+    return tx.table('transacciones').toCollection().modify(transaccion => {
+        // Transacciones existentes del CSV se marcan como confirmadas
+        if (!transaccion.origen) {
+            transaccion.origen = 'csv';
+        }
+        if (!transaccion.estado) {
+            transaccion.estado = 'confirmado';
+        }
+        if (!transaccion.textoOriginal) {
+            transaccion.textoOriginal = null;
+        }
+        if (!transaccion.transaccionRelacionadaId) {
+            transaccion.transaccionRelacionadaId = null;
         }
     });
 });
