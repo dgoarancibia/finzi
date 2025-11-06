@@ -2450,6 +2450,326 @@ window.calcularCostoOportunidad = function(montoTotal, cuotas, tasaInteres = 0, 
 
     </script>
 
+    <script>
+        // Sistema de Reconciliación Inteligente - Finzi v3.4
+// Empareja transacciones manuales (provisionales) con transacciones del CSV
+
+/**
+ * Calcula la distancia de Levenshtein entre dos strings
+ * Mide cuántos cambios (inserción, eliminación, sustitución) se necesitan
+ * @param {string} a - Primer string
+ * @param {string} b - Segundo string
+ * @returns {number} - Distancia de Levenshtein
+ */
+function levenshteinDistance(a, b) {
+    const matrix = [];
+
+    // Normalizar strings: minúsculas y sin espacios extras
+    const strA = a.toLowerCase().trim();
+    const strB = b.toLowerCase().trim();
+
+    // Inicializar primera columna
+    for (let i = 0; i <= strB.length; i++) {
+        matrix[i] = [i];
+    }
+
+    // Inicializar primera fila
+    for (let j = 0; j <= strA.length; j++) {
+        matrix[0][j] = j;
+    }
+
+    // Llenar la matriz
+    for (let i = 1; i <= strB.length; i++) {
+        for (let j = 1; j <= strA.length; j++) {
+            if (strB.charAt(i - 1) === strA.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1, // sustitución
+                    matrix[i][j - 1] + 1,     // inserción
+                    matrix[i - 1][j] + 1      // eliminación
+                );
+            }
+        }
+    }
+
+    return matrix[strB.length][strA.length];
+}
+
+/**
+ * Calcula la similitud entre dos strings (0-1)
+ * @param {string} a - Primer string
+ * @param {string} b - Segundo string
+ * @returns {number} - Similitud de 0 a 1 (1 = idéntico)
+ */
+function similaridadStrings(a, b) {
+    if (!a || !b) return 0;
+
+    const distance = levenshteinDistance(a, b);
+    const maxLength = Math.max(a.length, b.length);
+
+    if (maxLength === 0) return 1;
+
+    return 1 - (distance / maxLength);
+}
+
+/**
+ * Normaliza un nombre de comercio para comparación
+ * Elimina sufijos comunes, normaliza espacios, etc.
+ * @param {string} comercio - Nombre del comercio
+ * @returns {string} - Comercio normalizado
+ */
+function normalizarComercio(comercio) {
+    if (!comercio) return '';
+
+    let normalizado = comercio.toLowerCase().trim();
+
+    // Eliminar sufijos comunes de bancos
+    const sufijos = [
+        ' s.a.', ' sa', ' ltda', ' spa', ' chile',
+        ' inc', ' corp', ' corporation', ' company',
+        ' co.', ' co', ' store', ' tienda'
+    ];
+
+    for (const sufijo of sufijos) {
+        if (normalizado.endsWith(sufijo)) {
+            normalizado = normalizado.slice(0, -sufijo.length).trim();
+        }
+    }
+
+    // Eliminar caracteres especiales excepto espacios
+    normalizado = normalizado.replace(/[^a-z0-9\s]/g, '');
+
+    // Normalizar espacios múltiples
+    normalizado = normalizado.replace(/\s+/g, ' ');
+
+    return normalizado;
+}
+
+/**
+ * Calcula la diferencia de días entre dos fechas
+ * @param {string} fecha1 - Fecha en formato YYYY-MM-DD
+ * @param {string} fecha2 - Fecha en formato YYYY-MM-DD
+ * @returns {number} - Días de diferencia (absoluto)
+ */
+function diferenciaDias(fecha1, fecha2) {
+    const d1 = new Date(fecha1);
+    const d2 = new Date(fecha2);
+    const diff = Math.abs(d1 - d2);
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Calcula un score de matching entre dos transacciones
+ * @param {Object} manual - Transacción manual (provisional)
+ * @param {Object} csv - Transacción del CSV
+ * @returns {Object} - { score: number, detalles: object }
+ */
+window.calcularScoreMatching = function(manual, csv) {
+    const detalles = {
+        comercio: 0,
+        monto: 0,
+        fecha: 0
+    };
+
+    // 1. Similitud de COMERCIO (70% del peso)
+    const comercioManualNorm = normalizarComercio(manual.comercio);
+    const comercioCsvNorm = normalizarComercio(csv.comercio);
+    const similitudComercio = similaridadStrings(comercioManualNorm, comercioCsvNorm);
+    detalles.comercio = Math.round(similitudComercio * 70);
+
+    // 2. Similitud de MONTO (25% del peso)
+    // Consideramos match si la diferencia es menor al 5%
+    const montoManual = manual.monto;
+    const montoCsv = csv.monto;
+    const diferenciaMonto = Math.abs(montoManual - montoCsv);
+    const porcentajeDiferencia = (diferenciaMonto / montoManual) * 100;
+
+    if (porcentajeDiferencia === 0) {
+        detalles.monto = 25; // Monto exacto
+    } else if (porcentajeDiferencia <= 5) {
+        detalles.monto = 20; // Diferencia menor al 5%
+    } else if (porcentajeDiferencia <= 10) {
+        detalles.monto = 10; // Diferencia menor al 10%
+    } else {
+        detalles.monto = 0; // Diferencia mayor al 10%
+    }
+
+    // 3. Similitud de FECHA (5% del peso)
+    // Ventana de ±5 días
+    const diasDiferencia = diferenciaDias(manual.fecha, csv.fecha);
+
+    if (diasDiferencia === 0) {
+        detalles.fecha = 5; // Misma fecha
+    } else if (diasDiferencia <= 2) {
+        detalles.fecha = 4; // ±2 días
+    } else if (diasDiferencia <= 5) {
+        detalles.fecha = 2; // ±5 días
+    } else {
+        detalles.fecha = 0; // Más de 5 días
+    }
+
+    // Score total
+    const scoreTotal = detalles.comercio + detalles.monto + detalles.fecha;
+
+    return {
+        score: scoreTotal,
+        detalles: detalles,
+        similitudComercio: similitudComercio
+    };
+};
+
+/**
+ * Encuentra matches entre transacciones manuales y del CSV
+ * @param {Array} manuales - Transacciones manuales (provisionales)
+ * @param {Array} csvs - Transacciones del CSV recién cargado
+ * @returns {Object} - { autoMatches, suggestedMatches, noMatches }
+ */
+window.encontrarMatches = function(manuales, csvs) {
+    const autoMatches = []; // Score >= 85
+    const suggestedMatches = []; // 70 <= Score < 85
+    const noMatches = []; // Score < 70
+
+    // Crear copia de arrays para ir eliminando matches
+    const manualesRestantes = [...manuales];
+    const csvsRestantes = [...csvs];
+
+    // Para cada transacción manual, buscar el mejor match en CSV
+    for (const manual of manualesRestantes) {
+        let mejorMatch = null;
+        let mejorScore = 0;
+        let mejorIndice = -1;
+
+        for (let i = 0; i < csvsRestantes.length; i++) {
+            const csv = csvsRestantes[i];
+            const resultado = window.calcularScoreMatching(manual, csv);
+
+            if (resultado.score > mejorScore) {
+                mejorScore = resultado.score;
+                mejorMatch = csv;
+                mejorIndice = i;
+            }
+        }
+
+        // Clasificar según score
+        if (mejorScore >= 85) {
+            autoMatches.push({
+                manual: manual,
+                csv: mejorMatch,
+                score: mejorScore
+            });
+            // Eliminar del pool de CSV para evitar matches duplicados
+            csvsRestantes.splice(mejorIndice, 1);
+        } else if (mejorScore >= 70) {
+            suggestedMatches.push({
+                manual: manual,
+                csv: mejorMatch,
+                score: mejorScore
+            });
+            // No eliminar aún, puede haber otro mejor match
+        } else {
+            noMatches.push({
+                manual: manual,
+                score: mejorScore
+            });
+        }
+    }
+
+    return {
+        autoMatches: autoMatches,
+        suggestedMatches: suggestedMatches,
+        noMatches: noMatches,
+        csvsSinMatch: csvsRestantes
+    };
+};
+
+/**
+ * Fusiona una transacción manual con una del CSV
+ * La transacción del CSV es la "fuente de verdad", pero se preservan metadatos del manual
+ * @param {Object} manual - Transacción manual
+ * @param {Object} csv - Transacción del CSV
+ * @returns {Object} - Transacción fusionada
+ */
+window.fusionarTransacciones = async function(manual, csv) {
+    // La transacción del CSV es la fuente de verdad para datos básicos
+    const fusionada = {
+        ...csv,
+        estado: 'confirmado',
+        origen: 'csv',
+
+        // Preservar metadatos del manual si existen
+        textoOriginal: manual.textoOriginal || null,
+        transaccionRelacionadaId: manual.id, // Referencia al manual original
+
+        // Si el manual tenía categorización manual diferente, preservarla
+        categoriaManual: manual.categoria !== csv.categoria ? manual.categoria : null
+    };
+
+    // Actualizar la transacción del CSV con los datos fusionados
+    await db.transacciones.update(csv.id, fusionada);
+
+    // Eliminar la transacción manual (ya quedó fusionada)
+    await db.transacciones.delete(manual.id);
+
+    return fusionada;
+};
+
+/**
+ * Marca una transacción manual como "sin emparejar" (ej: pago en efectivo)
+ * @param {Object} manual - Transacción manual
+ * @param {string} motivo - Motivo por el cual no se empareja
+ */
+window.marcarSinEmparejar = async function(manual, motivo = 'No facturado') {
+    await db.transacciones.update(manual.id, {
+        estado: 'confirmado', // Ya no es provisional
+        origen: 'manual',
+        descripcion: manual.descripcion ? `${manual.descripcion} (${motivo})` : motivo
+    });
+};
+
+/**
+ * Ejecuta la reconciliación automática completa
+ * @param {string} mesAnio - Mes en formato YYYY-MM
+ * @returns {Object} - Resultado de la reconciliación
+ */
+window.ejecutarReconciliacion = async function(mesAnio) {
+    // 1. Obtener transacciones manuales provisionales de este mes
+    const todasManuales = await db.transacciones
+        .where('origen')
+        .equals('manual')
+        .and(t => t.estado === 'provisional')
+        .toArray();
+
+    // Filtrar por mes
+    const manuales = todasManuales.filter(t => {
+        const fechaMes = t.fecha.substring(0, 7); // YYYY-MM
+        return fechaMes === mesAnio;
+    });
+
+    // 2. Obtener transacciones del CSV recién cargado
+    const mesAnioObj = await db.mesesCarga.where('mesAnio').equals(mesAnio).first();
+    if (!mesAnioObj) {
+        return { error: 'Mes no encontrado' };
+    }
+
+    const csvs = await db.transacciones
+        .where('mesAnioId')
+        .equals(mesAnioObj.id)
+        .and(t => t.origen === 'csv')
+        .toArray();
+
+    // 3. Encontrar matches
+    const resultado = window.encontrarMatches(manuales, csvs);
+
+    return {
+        ...resultado,
+        totalManuales: manuales.length,
+        totalCsvs: csvs.length
+    };
+};
+
+    </script>
+
     <!-- FIREBASE (v3.3) -->
     <script>
         /**
@@ -5725,6 +6045,10 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
     const [transaccionesSeleccionadas, setTransaccionesSeleccionadas] = useState([]);
     const [filtroCategoria, setFiltroCategoria] = useState('todas');
 
+    // Estados para reconciliación (v3.4)
+    const [mostrarReconciliacion, setMostrarReconciliacion] = useState(false);
+    const [resultadoReconciliacion, setResultadoReconciliacion] = useState(null);
+
     const aniosDisponibles = [new Date().getFullYear(), new Date().getFullYear() - 1];
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -5909,10 +6233,14 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 ? transaccionesRevisadas
                 : transaccionesParsed;
 
-            // Agregar transacciones
+            // Agregar transacciones (marcadas como 'csv' y 'confirmado')
             const transaccionesParaGuardar = transaccionesAGuardar.map(t => ({
                 ...t,
-                mesAnioId
+                mesAnioId,
+                origen: 'csv',
+                estado: 'confirmado',
+                textoOriginal: null,
+                transaccionRelacionadaId: null
             }));
 
             await addTransacciones(transaccionesParaGuardar);
@@ -5930,8 +6258,19 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 }
             }
 
-            onSuccess(mesAnioId);
+            // RECONCILIACIÓN: Buscar transacciones manuales provisionales de este mes
+            const resultado = await window.ejecutarReconciliacion(mesAnio);
+
             setProcesando(false);
+
+            // Si hay transacciones para reconciliar, mostrar panel
+            if (resultado.totalManuales > 0) {
+                setResultadoReconciliacion(resultado);
+                setMostrarReconciliacion(true);
+            } else {
+                // Sin reconciliación necesaria, cerrar modal
+                onSuccess(mesAnioId);
+            }
         } catch (err) {
             console.error('Error al guardar:', err);
             setError('Error al guardar las transacciones');
@@ -5940,6 +6279,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
     };
 
     return (
+        <>
         <Modal
             isOpen={true}
             onClose={onClose}
@@ -6495,6 +6835,24 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 )}
             </div>
         </Modal>
+
+        {/* Modal de Reconciliación */}
+        {mostrarReconciliacion && resultadoReconciliacion && (
+            <Reconciliacion
+                resultado={resultadoReconciliacion}
+                onConfirmar={(resultado) => {
+                    setMostrarReconciliacion(false);
+                    onSuccess();
+                    onClose();
+                }}
+                onCancelar={() => {
+                    setMostrarReconciliacion(false);
+                    onSuccess();
+                    onClose();
+                }}
+            />
+        )}
+    </>
     );
 };
 
@@ -11351,6 +11709,357 @@ const EntradaRapida = ({ onClose, onSuccess }) => {
                     </button>
                 </div>
             </form>
+        </Modal>
+    );
+};
+
+    </script>
+
+    <script type="text/babel">
+        // Panel de Reconciliación Inteligente - Finzi v3.4
+
+const Reconciliacion = ({ resultado, onConfirmar, onCancelar }) => {
+    const [decisiones, setDecisiones] = useState({
+        autoMatches: {}, // { manualId: 'accept' | 'reject' }
+        suggestedMatches: {}, // { manualId: csvId | 'none' }
+        noMatches: {} // { manualId: 'keep' | 'delete' }
+    });
+
+    // Inicializar decisiones con valores por defecto
+    useEffect(() => {
+        const defaultDecisiones = {
+            autoMatches: {},
+            suggestedMatches: {},
+            noMatches: {}
+        };
+
+        // Auto-matches: aceptar por defecto
+        resultado.autoMatches.forEach(match => {
+            defaultDecisiones.autoMatches[match.manual.id] = 'accept';
+        });
+
+        // Suggested matches: aceptar sugerencia por defecto
+        resultado.suggestedMatches.forEach(match => {
+            defaultDecisiones.suggestedMatches[match.manual.id] = match.csv.id;
+        });
+
+        // No matches: mantener por defecto
+        resultado.noMatches.forEach(item => {
+            defaultDecisiones.noMatches[item.manual.id] = 'keep';
+        });
+
+        setDecisiones(defaultDecisiones);
+    }, [resultado]);
+
+    const handleConfirmar = async () => {
+        // Procesar todas las decisiones
+        const resultadoFinal = {
+            fusionados: [],
+            mantenidos: [],
+            eliminados: []
+        };
+
+        try {
+            // 1. Procesar auto-matches
+            for (const match of resultado.autoMatches) {
+                const decision = decisiones.autoMatches[match.manual.id];
+                if (decision === 'accept') {
+                    await window.fusionarTransacciones(match.manual, match.csv);
+                    resultadoFinal.fusionados.push(match.manual.id);
+                }
+            }
+
+            // 2. Procesar suggested matches
+            for (const match of resultado.suggestedMatches) {
+                const csvId = decisiones.suggestedMatches[match.manual.id];
+                if (csvId && csvId !== 'none') {
+                    // Buscar el CSV correspondiente
+                    const csvMatch = csvId === match.csv.id ? match.csv : null;
+                    if (csvMatch) {
+                        await window.fusionarTransacciones(match.manual, csvMatch);
+                        resultadoFinal.fusionados.push(match.manual.id);
+                    }
+                }
+            }
+
+            // 3. Procesar no-matches
+            for (const item of resultado.noMatches) {
+                const decision = decisiones.noMatches[item.manual.id];
+                if (decision === 'keep') {
+                    await window.marcarSinEmparejar(item.manual, 'Pago no incluido en TC');
+                    resultadoFinal.mantenidos.push(item.manual.id);
+                } else if (decision === 'delete') {
+                    await db.transacciones.delete(item.manual.id);
+                    resultadoFinal.eliminados.push(item.manual.id);
+                }
+            }
+
+            onConfirmar(resultadoFinal);
+        } catch (error) {
+            console.error('Error en reconciliación:', error);
+            alert('Error al procesar la reconciliación');
+        }
+    };
+
+    const totalProcesar = resultado.autoMatches.length + resultado.suggestedMatches.length + resultado.noMatches.length;
+
+    return (
+        <Modal title="🔗 Reconciliación de Transacciones" onClose={onCancelar} size="xl">
+            <div className="space-y-6">
+                {/* Resumen */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <p className="text-sm text-blue-800 dark:text-blue-300">
+                        📊 Encontramos <span className="font-bold">{totalProcesar} transacciones manuales</span> del mes.
+                        Revisa los emparejamientos sugeridos antes de confirmar.
+                    </p>
+                </div>
+
+                {/* Sección 1: Emparejados automáticamente */}
+                {resultado.autoMatches.length > 0 && (
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 flex items-center">
+                            <span className="text-2xl mr-2">✅</span>
+                            Emparejados automáticamente ({resultado.autoMatches.length})
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Match mayor al 85%. Se fusionarán automáticamente.
+                        </p>
+                        <div className="space-y-3">
+                            {resultado.autoMatches.map(match => (
+                                <div
+                                    key={match.manual.id}
+                                    className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4"
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                            {/* Transacción manual */}
+                                            <div className="mb-2">
+                                                <span className="inline-block px-2 py-1 bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200 text-xs font-semibold rounded mr-2">
+                                                    🟠 Manual
+                                                </span>
+                                                <span className="font-semibold text-gray-900 dark:text-white">
+                                                    {match.manual.comercio}
+                                                </span>
+                                                <span className="ml-2 text-gray-700 dark:text-gray-300">
+                                                    ${match.manual.monto.toLocaleString('es-CL')}
+                                                </span>
+                                                <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                                    {new Date(match.manual.fecha).toLocaleDateString('es-CL')}
+                                                </span>
+                                            </div>
+
+                                            {/* Flecha */}
+                                            <div className="flex items-center my-1">
+                                                <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                                </svg>
+                                                <span className="ml-2 text-xs font-semibold text-green-700 dark:text-green-400">
+                                                    Match {match.score}%
+                                                </span>
+                                            </div>
+
+                                            {/* Transacción CSV */}
+                                            <div>
+                                                <span className="inline-block px-2 py-1 bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 text-xs font-semibold rounded mr-2">
+                                                    ✅ CSV
+                                                </span>
+                                                <span className="font-semibold text-gray-900 dark:text-white">
+                                                    {match.csv.comercio}
+                                                </span>
+                                                <span className="ml-2 text-gray-700 dark:text-gray-300">
+                                                    ${match.csv.monto.toLocaleString('es-CL')}
+                                                </span>
+                                                <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                                    {new Date(match.csv.fecha).toLocaleDateString('es-CL')}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Toggle para rechazar */}
+                                        <button
+                                            onClick={() => {
+                                                const newDecision = decisiones.autoMatches[match.manual.id] === 'accept' ? 'reject' : 'accept';
+                                                setDecisiones({
+                                                    ...decisiones,
+                                                    autoMatches: {
+                                                        ...decisiones.autoMatches,
+                                                        [match.manual.id]: newDecision
+                                                    }
+                                                });
+                                            }}
+                                            className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${
+                                                decisiones.autoMatches[match.manual.id] === 'accept'
+                                                    ? 'bg-green-600 text-white hover:bg-green-700'
+                                                    : 'bg-red-600 text-white hover:bg-red-700'
+                                            }`}
+                                        >
+                                            {decisiones.autoMatches[match.manual.id] === 'accept' ? '✓ Aceptar' : '✗ Rechazar'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Sección 2: Requieren revisión */}
+                {resultado.suggestedMatches.length > 0 && (
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 flex items-center">
+                            <span className="text-2xl mr-2">⚠️</span>
+                            Requieren revisión ({resultado.suggestedMatches.length})
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Match entre 70-85%. Revisa si son el mismo gasto.
+                        </p>
+                        <div className="space-y-3">
+                            {resultado.suggestedMatches.map(match => (
+                                <div
+                                    key={match.manual.id}
+                                    className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4"
+                                >
+                                    {/* Transacción manual */}
+                                    <div className="mb-2">
+                                        <span className="inline-block px-2 py-1 bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200 text-xs font-semibold rounded mr-2">
+                                            🟠 Manual
+                                        </span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">
+                                            {match.manual.comercio}
+                                        </span>
+                                        <span className="ml-2 text-gray-700 dark:text-gray-300">
+                                            ${match.manual.monto.toLocaleString('es-CL')}
+                                        </span>
+                                        <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                            {new Date(match.manual.fecha).toLocaleDateString('es-CL')}
+                                        </span>
+                                    </div>
+
+                                    {/* Opciones de emparejamiento */}
+                                    <div className="mt-3 space-y-2">
+                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            ¿Emparejar con?
+                                        </p>
+                                        <label className="flex items-center space-x-2">
+                                            <input
+                                                type="radio"
+                                                name={`match-${match.manual.id}`}
+                                                checked={decisiones.suggestedMatches[match.manual.id] === match.csv.id}
+                                                onChange={() => {
+                                                    setDecisiones({
+                                                        ...decisiones,
+                                                        suggestedMatches: {
+                                                            ...decisiones.suggestedMatches,
+                                                            [match.manual.id]: match.csv.id
+                                                        }
+                                                    });
+                                                }}
+                                                className="w-4 h-4"
+                                            />
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                <span className="font-semibold">{match.csv.comercio}</span> - ${match.csv.monto.toLocaleString('es-CL')} ({new Date(match.csv.fecha).toLocaleDateString('es-CL')})
+                                                <span className="ml-2 text-yellow-600 dark:text-yellow-400 font-medium">
+                                                    {match.score}% match
+                                                </span>
+                                            </span>
+                                        </label>
+                                        <label className="flex items-center space-x-2">
+                                            <input
+                                                type="radio"
+                                                name={`match-${match.manual.id}`}
+                                                checked={decisiones.suggestedMatches[match.manual.id] === 'none'}
+                                                onChange={() => {
+                                                    setDecisiones({
+                                                        ...decisiones,
+                                                        suggestedMatches: {
+                                                            ...decisiones.suggestedMatches,
+                                                            [match.manual.id]: 'none'
+                                                        }
+                                                    });
+                                                }}
+                                                className="w-4 h-4"
+                                            />
+                                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                                                No emparejar (mantener separado)
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Sección 3: Sin emparejar */}
+                {resultado.noMatches.length > 0 && (
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 flex items-center">
+                            <span className="text-2xl mr-2">❓</span>
+                            Sin emparejar ({resultado.noMatches.length})
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            No se encontró match en el CSV. Probablemente pagos en efectivo o compras no facturadas.
+                        </p>
+                        <div className="space-y-3">
+                            {resultado.noMatches.map(item => (
+                                <div
+                                    key={item.manual.id}
+                                    className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <span className="inline-block px-2 py-1 bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200 text-xs font-semibold rounded mr-2">
+                                                🟠 Manual
+                                            </span>
+                                            <span className="font-semibold text-gray-900 dark:text-white">
+                                                {item.manual.comercio}
+                                            </span>
+                                            <span className="ml-2 text-gray-700 dark:text-gray-300">
+                                                ${item.manual.monto.toLocaleString('es-CL')}
+                                            </span>
+                                            <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                                {new Date(item.manual.fecha).toLocaleDateString('es-CL')}
+                                            </span>
+                                        </div>
+
+                                        <select
+                                            value={decisiones.noMatches[item.manual.id]}
+                                            onChange={(e) => {
+                                                setDecisiones({
+                                                    ...decisiones,
+                                                    noMatches: {
+                                                        ...decisiones.noMatches,
+                                                        [item.manual.id]: e.target.value
+                                                    }
+                                                });
+                                            }}
+                                            className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white"
+                                        >
+                                            <option value="keep">Mantener (no facturado)</option>
+                                            <option value="delete">Eliminar (error)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Botones de acción */}
+                <div className="flex space-x-3 pt-4 border-t border-gray-200 dark:border-slate-700">
+                    <button
+                        onClick={onCancelar}
+                        className="flex-1 px-6 py-3 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors font-semibold"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleConfirmar}
+                        className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg font-semibold"
+                    >
+                        Confirmar Reconciliación
+                    </button>
+                </div>
+            </div>
         </Modal>
     );
 };

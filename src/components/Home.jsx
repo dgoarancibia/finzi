@@ -1439,6 +1439,10 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
     const [transaccionesSeleccionadas, setTransaccionesSeleccionadas] = useState([]);
     const [filtroCategoria, setFiltroCategoria] = useState('todas');
 
+    // Estados para reconciliación (v3.4)
+    const [mostrarReconciliacion, setMostrarReconciliacion] = useState(false);
+    const [resultadoReconciliacion, setResultadoReconciliacion] = useState(null);
+
     const aniosDisponibles = [new Date().getFullYear(), new Date().getFullYear() - 1];
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -1623,10 +1627,14 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 ? transaccionesRevisadas
                 : transaccionesParsed;
 
-            // Agregar transacciones
+            // Agregar transacciones (marcadas como 'csv' y 'confirmado')
             const transaccionesParaGuardar = transaccionesAGuardar.map(t => ({
                 ...t,
-                mesAnioId
+                mesAnioId,
+                origen: 'csv',
+                estado: 'confirmado',
+                textoOriginal: null,
+                transaccionRelacionadaId: null
             }));
 
             await addTransacciones(transaccionesParaGuardar);
@@ -1644,8 +1652,19 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 }
             }
 
-            onSuccess(mesAnioId);
+            // RECONCILIACIÓN: Buscar transacciones manuales provisionales de este mes
+            const resultado = await window.ejecutarReconciliacion(mesAnio);
+
             setProcesando(false);
+
+            // Si hay transacciones para reconciliar, mostrar panel
+            if (resultado.totalManuales > 0) {
+                setResultadoReconciliacion(resultado);
+                setMostrarReconciliacion(true);
+            } else {
+                // Sin reconciliación necesaria, cerrar modal
+                onSuccess(mesAnioId);
+            }
         } catch (err) {
             console.error('Error al guardar:', err);
             setError('Error al guardar las transacciones');
@@ -1654,6 +1673,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
     };
 
     return (
+        <>
         <Modal
             isOpen={true}
             onClose={onClose}
@@ -2209,6 +2229,24 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 )}
             </div>
         </Modal>
+
+        {/* Modal de Reconciliación */}
+        {mostrarReconciliacion && resultadoReconciliacion && (
+            <Reconciliacion
+                resultado={resultadoReconciliacion}
+                onConfirmar={(resultado) => {
+                    setMostrarReconciliacion(false);
+                    onSuccess();
+                    onClose();
+                }}
+                onCancelar={() => {
+                    setMostrarReconciliacion(false);
+                    onSuccess();
+                    onClose();
+                }}
+            />
+        )}
+    </>
     );
 };
 
