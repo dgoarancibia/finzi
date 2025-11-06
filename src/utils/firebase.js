@@ -56,14 +56,11 @@ window.initializeFirebase = async function() {
                     console.warn('⚠️ Persistencia: múltiples pestañas abiertas');
                 } else if (err.code === 'unimplemented') {
                     console.warn('⚠️ Persistencia no soportada en este navegador');
+                } else {
+                    console.warn('⚠️ Error en persistencia:', err);
                 }
             }
         }
-
-        // Configurar settings
-        window.firestore.settings({
-            cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED
-        });
 
         console.log('✅ Firestore inicializada');
 
