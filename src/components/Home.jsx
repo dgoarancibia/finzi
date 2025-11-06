@@ -1601,21 +1601,21 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
         <Modal
             isOpen={true}
             onClose={onClose}
-            title="Cargar Archivo CSV"
-            size="lg"
+            title="Cargar CSV"
+            size="md"
         >
-            <div className="space-y-6">
-                {/* Indicador de pasos */}
-                <div className="flex items-center justify-between">
+            <div className="space-y-2.5 sm:space-y-6 max-w-md mx-auto sm:max-w-full">
+                {/* Indicador de pasos - Responsive y más compacto */}
+                <div className="flex items-center justify-center gap-0.5 sm:gap-0 sm:justify-between overflow-x-auto pb-1">
                     {[1, 2, 3, 4].map(num => (
-                        <div key={num} className="flex items-center">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                        <div key={num} className="flex items-center flex-shrink-0">
+                            <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-base ${
                                 paso >= num ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'
                             }`}>
                                 {num}
                             </div>
                             {num < 4 && (
-                                <div className={`w-16 h-1 ${paso > num ? 'bg-indigo-600' : 'bg-gray-200'}`} />
+                                <div className={`w-4 sm:w-16 h-0.5 sm:h-1 ${paso > num ? 'bg-indigo-600' : 'bg-gray-200'}`} />
                             )}
                         </div>
                     ))}
@@ -1623,16 +1623,16 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
                 {/* Paso 1: Seleccionar mes y año */}
                 {paso === 1 && (
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Selecciona el mes y año de las transacciones</h3>
+                    <div className="space-y-2.5 sm:space-y-4">
+                        <h3 className="text-sm sm:text-lg font-semibold">Selecciona el mes y año</h3>
 
-                        {/* Selector de año */}
-                        <div className="flex space-x-4">
+                        {/* Selector de año - Responsive */}
+                        <div className="flex gap-2 sm:gap-4">
                             {aniosDisponibles.map(anio => (
                                 <button
                                     key={anio}
                                     onClick={() => setAnioSeleccionado(anio)}
-                                    className={`flex-1 py-3 rounded-lg font-semibold transition-colors ${
+                                    className={`flex-1 py-2 sm:py-3 rounded-lg font-semibold text-sm sm:text-base transition-colors ${
                                         anioSeleccionado === anio
                                             ? 'bg-indigo-600 text-white'
                                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1643,8 +1643,8 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                             ))}
                         </div>
 
-                        {/* Grilla de meses */}
-                        <div className="grid grid-cols-3 gap-3">
+                        {/* Grilla de meses - 4 columnas en mobile para que entre todo */}
+                        <div className="grid grid-cols-4 sm:grid-cols-3 gap-1.5 sm:gap-3">
                             {meses.map((mes, index) => (
                                 <button
                                     key={index}
@@ -1652,7 +1652,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                         setMesSeleccionado(index);
                                         setPaso(2);
                                     }}
-                                    className={`py-4 rounded-lg font-semibold transition-colors ${
+                                    className={`py-1.5 sm:py-4 px-0.5 rounded-md sm:rounded-lg font-semibold text-[11px] sm:text-base transition-colors ${
                                         mesSeleccionado === index
                                             ? 'bg-indigo-600 text-white'
                                             : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
@@ -1667,12 +1667,12 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
                 {/* Paso 2: Subir archivo */}
                 {paso === 2 && (
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">
-                            Sube tu archivo CSV para {meses[mesSeleccionado]} {anioSeleccionado}
+                    <div className="space-y-3 sm:space-y-4">
+                        <h3 className="text-sm sm:text-lg font-semibold">
+                            CSV: {meses[mesSeleccionado]} {anioSeleccionado}
                         </h3>
 
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-8 text-center">
                             <input
                                 type="file"
                                 accept=".csv"
@@ -1684,12 +1684,12 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                 htmlFor="file-upload"
                                 className="cursor-pointer flex flex-col items-center"
                             >
-                                <svg className="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-10 h-10 sm:w-16 sm:h-16 text-gray-400 mb-2 sm:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                 </svg>
-                                <p className="text-lg font-semibold text-gray-700">Haz clic para seleccionar un archivo</p>
-                                <p className="text-sm text-gray-500 mt-1">o arrastra y suelta aquí</p>
-                                <p className="text-xs text-gray-400 mt-2">Formato: CSV con columnas Fecha;Descripción;Monto;Cuotas</p>
+                                <p className="text-sm sm:text-lg font-semibold text-gray-700">Seleccionar archivo</p>
+                                <p className="text-xs sm:text-sm text-gray-500 mt-1">o arrastra aquí</p>
+                                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 sm:mt-2">CSV: Fecha;Descripción;Monto;Cuotas</p>
                             </label>
                         </div>
 
@@ -1699,10 +1699,10 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                             </AlertBadge>
                         )}
 
-                        <div className="flex space-x-3">
+                        <div className="flex space-x-2 sm:space-x-3">
                             <button
                                 onClick={() => setPaso(1)}
-                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                className="flex-1 px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg hover:bg-gray-50"
                             >
                                 Atrás
                             </button>
@@ -1712,29 +1712,29 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
                 {/* Paso 3: Seleccionar perfil y modo */}
                 {paso === 3 && (
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Asigna un perfil y elige el modo de revisión</h3>
+                    <div className="space-y-3 sm:space-y-4">
+                        <h3 className="text-sm sm:text-lg font-semibold">Perfil y modo</h3>
 
                         {/* Selector de Perfil */}
                         <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">Perfil:</p>
-                            <div className="grid grid-cols-1 gap-3">
+                            <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Perfil:</p>
+                            <div className="grid grid-cols-1 gap-2 sm:gap-3">
                                 {perfiles.map(perfil => (
                                     <button
                                         key={perfil.id}
                                         onClick={() => setPerfilSeleccionado(perfil.id)}
-                                        className={`p-4 rounded-lg border-2 transition-colors ${
+                                        className={`p-2.5 sm:p-4 rounded-lg border-2 transition-colors ${
                                             perfilSeleccionado === perfil.id
                                                 ? 'border-indigo-600 bg-indigo-50'
                                                 : 'border-gray-200 hover:border-indigo-300'
                                         }`}
                                     >
-                                        <div className="flex items-center space-x-3">
+                                        <div className="flex items-center space-x-2 sm:space-x-3">
                                             <div
-                                                className="w-4 h-4 rounded-full"
+                                                className="w-3 h-3 sm:w-4 sm:h-4 rounded-full"
                                                 style={{ backgroundColor: perfil.color }}
                                             />
-                                            <span className="font-semibold">{perfil.nombre}</span>
+                                            <span className="font-semibold text-sm sm:text-base">{perfil.nombre}</span>
                                         </div>
                                     </button>
                                 ))}
@@ -1742,39 +1742,39 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                         </div>
 
                         {/* Selector de Modo de Revisión */}
-                        <div className="border-t pt-4">
-                            <p className="text-sm font-medium text-gray-700 mb-2">Modo de Revisión:</p>
-                            <div className="grid grid-cols-2 gap-3">
+                        <div className="border-t pt-3 sm:pt-4">
+                            <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Modo:</p>
+                            <div className="grid grid-cols-2 gap-2 sm:gap-3">
                                 <button
                                     onClick={() => setModoRevision('auto')}
-                                    className={`p-4 rounded-lg border-2 transition-colors ${
+                                    className={`p-2 sm:p-4 rounded-lg border-2 transition-colors ${
                                         modoRevision === 'auto'
                                             ? 'border-green-600 bg-green-50'
                                             : 'border-gray-200 hover:border-green-300'
                                     }`}
                                 >
                                     <div className="text-center">
-                                        <span className="text-3xl block mb-2">⚡</span>
-                                        <p className="font-semibold text-gray-800">Automático</p>
-                                        <p className="text-xs text-gray-600 mt-1">
-                                            Carga rápida con categorización automática. Revisión opcional al final.
+                                        <span className="text-xl sm:text-3xl block mb-1 sm:mb-2">⚡</span>
+                                        <p className="font-semibold text-gray-800 text-xs sm:text-base">Auto</p>
+                                        <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">
+                                            Carga rápida con categorización automática.
                                         </p>
                                     </div>
                                 </button>
 
                                 <button
                                     onClick={() => setModoRevision('manual')}
-                                    className={`p-4 rounded-lg border-2 transition-colors ${
+                                    className={`p-2 sm:p-4 rounded-lg border-2 transition-colors ${
                                         modoRevision === 'manual'
                                             ? 'border-blue-600 bg-blue-50'
                                             : 'border-gray-200 hover:border-blue-300'
                                     }`}
                                 >
                                     <div className="text-center">
-                                        <span className="text-3xl block mb-2">👁️</span>
-                                        <p className="font-semibold text-gray-800">Manual</p>
-                                        <p className="text-xs text-gray-600 mt-1">
-                                            Revisa y edita cada transacción una por una antes de guardar.
+                                        <span className="text-xl sm:text-3xl block mb-1 sm:mb-2">👁️</span>
+                                        <p className="font-semibold text-gray-800 text-xs sm:text-base">Manual</p>
+                                        <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">
+                                            Revisa cada transacción una por una.
                                         </p>
                                     </div>
                                 </button>

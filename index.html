@@ -211,6 +211,30 @@
                 grid-template-columns: 1fr !important;
             }
         }
+
+        /* Prevent horizontal overflow */
+        * {
+            max-width: 100%;
+        }
+
+        /* Ensure containers don't overflow */
+        @media (max-width: 1024px) {
+            .container, .max-w-7xl, .max-w-6xl, .max-w-5xl, .max-w-4xl {
+                max-width: 100% !important;
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+
+            /* Grid responsivo por defecto */
+            [class*="grid-cols-"] {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Flex wrap en mobile */
+            .flex {
+                flex-wrap: wrap;
+            }
+        }
     </style>
 </head>
 <body>
@@ -3168,28 +3192,28 @@ const Modal = memo(({ isOpen, onClose, title, children, size = 'md', showCloseBu
     if (!isOpen) return null;
 
     const sizeClasses = {
-        sm: 'max-w-md',
-        md: 'max-w-2xl',
-        lg: 'max-w-4xl',
-        xl: 'max-w-6xl',
+        sm: 'max-w-[95vw] sm:max-w-md',
+        md: 'max-w-[95vw] sm:max-w-2xl',
+        lg: 'max-w-[95vw] sm:max-w-4xl',
+        xl: 'max-w-[95vw] sm:max-w-6xl',
         full: 'max-w-full mx-2 sm:mx-4'
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 animate-slideIn bg-black bg-opacity-50 dark:bg-opacity-70">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 animate-slideIn bg-black bg-opacity-50 dark:bg-opacity-70">
             <div
-                className={`bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl ${sizeClasses[size]} w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-slate-700 shadow-minimal-lg`}
+                className={`bg-white dark:bg-slate-800 rounded-lg sm:rounded-2xl ${sizeClasses[size]} w-full max-h-[98vh] sm:max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-slate-700 shadow-minimal-lg`}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header minimalista - responsive */}
-                <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                    <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate pr-2">
+                <div className="flex items-center justify-between p-3 sm:p-6 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
+                    <h2 className="text-base sm:text-2xl font-bold text-gray-900 dark:text-white truncate pr-2">
                         {title}
                     </h2>
                     {showCloseButton && (
                         <button
                             onClick={onClose}
-                            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg flex-shrink-0"
+                            className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors p-1.5 sm:p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg flex-shrink-0"
                             aria-label="Cerrar modal"
                         >
                             <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3200,7 +3224,7 @@ const Modal = memo(({ isOpen, onClose, title, children, size = 'md', showCloseBu
                 </div>
 
                 {/* Content - responsive padding */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+                <div className="flex-1 overflow-y-auto p-3 sm:p-6">
                     {children}
                 </div>
             </div>
@@ -3892,25 +3916,23 @@ const Sidebar = () => {
 
     return (
         <>
-            {/* Botón Hamburguesa para Mobile */}
-            <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="fixed top-4 left-4 z-50 lg:hidden p-3 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700"
-                aria-label="Toggle menu"
-            >
-                <svg
-                    className="w-6 h-6 text-gray-700 dark:text-gray-300"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+            {/* Botón Hamburguesa para Mobile - Mejorado */}
+            {!isSidebarOpen && (
+                <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="fixed top-3 left-3 z-50 lg:hidden p-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg transition-all"
+                    aria-label="Abrir menú"
                 >
-                    {isSidebarOpen ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                    )}
-                </svg>
-            </button>
+                    <svg
+                        className="w-5 h-5 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+            )}
 
             {/* Sidebar - Responsive */}
             <aside
@@ -3921,13 +3943,13 @@ const Sidebar = () => {
                     boxShadow: '2px 0 8px rgba(0, 0, 0, 0.05)'
                 }}
             >
-                {/* Header minimalista */}
-                <div className={`border-b border-gray-100 dark:border-slate-700 flex-shrink-0 ${isSidebarOpen ? 'p-6' : 'p-2'}`}>
+                {/* Header minimalista - Responsive */}
+                <div className={`border-b border-gray-100 dark:border-slate-700 flex-shrink-0 ${isSidebarOpen ? 'p-4 lg:p-6' : 'p-2'}`}>
                     <div className="flex items-center justify-between">
                         {isSidebarOpen ? (
                             <div className="animate-slideIn flex-1">
-                                <LogoFinzi className="text-gray-900 dark:text-white mb-2" />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">v3.2 - Gastos TC</p>
+                                <LogoFinzi className="text-gray-900 dark:text-white mb-1 scale-90 lg:scale-100" />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium hidden lg:block">v3.2 - Gastos TC</p>
                             </div>
                         ) : (
                             <div className="mx-auto">
@@ -3936,17 +3958,17 @@ const Sidebar = () => {
                         )}
                         {isSidebarOpen && (
                             <button
-                                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all ml-2"
-                                aria-label="Contraer menú"
+                                onClick={() => setIsSidebarOpen(false)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all ml-2 lg:hidden"
+                                aria-label="Cerrar menú"
                             >
                                 <svg
-                                    className="w-5 h-5 transition-transform duration-300"
+                                    className="w-5 h-5"
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
                                 >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         )}
@@ -3969,17 +3991,23 @@ const Sidebar = () => {
                     )}
                 </div>
 
-                {/* Menu Items minimalistas */}
-                <nav className={`space-y-2 overflow-y-auto flex-1 ${isSidebarOpen ? 'p-4' : 'p-1'}`} style={{ maxHeight: 'calc(100vh - 200px)' }}>
+                {/* Menu Items minimalistas - Mobile optimizado */}
+                <nav className={`space-y-1 lg:space-y-2 overflow-y-auto flex-1 ${isSidebarOpen ? 'p-2 lg:p-4' : 'p-1'}`} style={{ maxHeight: 'calc(100vh - 200px)' }}>
                     {menuItems.map((item, index) => {
                         const isActive = currentPage === item.id;
 
                         return (
                             <button
                                 key={item.id}
-                                onClick={() => setCurrentPage(item.id)}
-                                className={`w-full flex items-center rounded-xl transition-all duration-300 group relative ${
-                                    isSidebarOpen ? 'space-x-3 px-4 py-3' : 'justify-center py-3 px-2'
+                                onClick={() => {
+                                    setCurrentPage(item.id);
+                                    // Cerrar sidebar en mobile después de seleccionar
+                                    if (window.innerWidth < 1024) {
+                                        setIsSidebarOpen(false);
+                                    }
+                                }}
+                                className={`w-full flex items-center rounded-lg lg:rounded-xl transition-all duration-300 group relative ${
+                                    isSidebarOpen ? 'space-x-2 lg:space-x-3 px-3 lg:px-4 py-2 lg:py-3' : 'justify-center py-3 px-2'
                                 } ${
                                     isActive
                                         ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
@@ -3990,25 +4018,25 @@ const Sidebar = () => {
                                 {/* Barra lateral para item activo */}
                                 {isActive && (
                                     <div
-                                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-600 rounded-r-full"
+                                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 lg:h-8 bg-indigo-600 rounded-r-full"
                                     />
                                 )}
 
-                                {/* Icono */}
+                                {/* Icono - más pequeño en mobile */}
                                 <span
-                                    className="text-2xl flex-shrink-0 transition-transform group-hover:scale-110"
+                                    className="text-xl lg:text-2xl flex-shrink-0 transition-transform group-hover:scale-110"
                                 >
                                     {item.icon}
                                 </span>
 
                                 {isSidebarOpen && (
-                                    <div className="flex-1 text-left">
-                                        <p className={`font-bold text-sm ${
+                                    <div className="flex-1 text-left min-w-0">
+                                        <p className={`font-bold text-xs lg:text-sm truncate ${
                                             isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
                                         }`}>
                                             {item.label}
                                         </p>
-                                        <p className={`text-xs ${
+                                        <p className={`text-xs hidden lg:block ${
                                             isActive ? 'text-indigo-400 dark:text-indigo-500' : 'text-gray-500 dark:text-gray-400'
                                         }`}>
                                             {item.description}
@@ -5679,21 +5707,21 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
         <Modal
             isOpen={true}
             onClose={onClose}
-            title="Cargar Archivo CSV"
-            size="lg"
+            title="Cargar CSV"
+            size="md"
         >
-            <div className="space-y-6">
-                {/* Indicador de pasos */}
-                <div className="flex items-center justify-between">
+            <div className="space-y-2.5 sm:space-y-6 max-w-md mx-auto sm:max-w-full">
+                {/* Indicador de pasos - Responsive y más compacto */}
+                <div className="flex items-center justify-center gap-0.5 sm:gap-0 sm:justify-between overflow-x-auto pb-1">
                     {[1, 2, 3, 4].map(num => (
-                        <div key={num} className="flex items-center">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                        <div key={num} className="flex items-center flex-shrink-0">
+                            <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-base ${
                                 paso >= num ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'
                             }`}>
                                 {num}
                             </div>
                             {num < 4 && (
-                                <div className={`w-16 h-1 ${paso > num ? 'bg-indigo-600' : 'bg-gray-200'}`} />
+                                <div className={`w-4 sm:w-16 h-0.5 sm:h-1 ${paso > num ? 'bg-indigo-600' : 'bg-gray-200'}`} />
                             )}
                         </div>
                     ))}
@@ -5701,16 +5729,16 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
                 {/* Paso 1: Seleccionar mes y año */}
                 {paso === 1 && (
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Selecciona el mes y año de las transacciones</h3>
+                    <div className="space-y-2.5 sm:space-y-4">
+                        <h3 className="text-sm sm:text-lg font-semibold">Selecciona el mes y año</h3>
 
-                        {/* Selector de año */}
-                        <div className="flex space-x-4">
+                        {/* Selector de año - Responsive */}
+                        <div className="flex gap-2 sm:gap-4">
                             {aniosDisponibles.map(anio => (
                                 <button
                                     key={anio}
                                     onClick={() => setAnioSeleccionado(anio)}
-                                    className={`flex-1 py-3 rounded-lg font-semibold transition-colors ${
+                                    className={`flex-1 py-2 sm:py-3 rounded-lg font-semibold text-sm sm:text-base transition-colors ${
                                         anioSeleccionado === anio
                                             ? 'bg-indigo-600 text-white'
                                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -5721,8 +5749,8 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                             ))}
                         </div>
 
-                        {/* Grilla de meses */}
-                        <div className="grid grid-cols-3 gap-3">
+                        {/* Grilla de meses - 4 columnas en mobile para que entre todo */}
+                        <div className="grid grid-cols-4 sm:grid-cols-3 gap-1.5 sm:gap-3">
                             {meses.map((mes, index) => (
                                 <button
                                     key={index}
@@ -5730,7 +5758,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                         setMesSeleccionado(index);
                                         setPaso(2);
                                     }}
-                                    className={`py-4 rounded-lg font-semibold transition-colors ${
+                                    className={`py-1.5 sm:py-4 px-0.5 rounded-md sm:rounded-lg font-semibold text-[11px] sm:text-base transition-colors ${
                                         mesSeleccionado === index
                                             ? 'bg-indigo-600 text-white'
                                             : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
@@ -5745,12 +5773,12 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
                 {/* Paso 2: Subir archivo */}
                 {paso === 2 && (
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">
-                            Sube tu archivo CSV para {meses[mesSeleccionado]} {anioSeleccionado}
+                    <div className="space-y-3 sm:space-y-4">
+                        <h3 className="text-sm sm:text-lg font-semibold">
+                            CSV: {meses[mesSeleccionado]} {anioSeleccionado}
                         </h3>
 
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-8 text-center">
                             <input
                                 type="file"
                                 accept=".csv"
@@ -5762,12 +5790,12 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                 htmlFor="file-upload"
                                 className="cursor-pointer flex flex-col items-center"
                             >
-                                <svg className="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-10 h-10 sm:w-16 sm:h-16 text-gray-400 mb-2 sm:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                                 </svg>
-                                <p className="text-lg font-semibold text-gray-700">Haz clic para seleccionar un archivo</p>
-                                <p className="text-sm text-gray-500 mt-1">o arrastra y suelta aquí</p>
-                                <p className="text-xs text-gray-400 mt-2">Formato: CSV con columnas Fecha;Descripción;Monto;Cuotas</p>
+                                <p className="text-sm sm:text-lg font-semibold text-gray-700">Seleccionar archivo</p>
+                                <p className="text-xs sm:text-sm text-gray-500 mt-1">o arrastra aquí</p>
+                                <p className="text-[10px] sm:text-xs text-gray-400 mt-1 sm:mt-2">CSV: Fecha;Descripción;Monto;Cuotas</p>
                             </label>
                         </div>
 
@@ -5777,10 +5805,10 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                             </AlertBadge>
                         )}
 
-                        <div className="flex space-x-3">
+                        <div className="flex space-x-2 sm:space-x-3">
                             <button
                                 onClick={() => setPaso(1)}
-                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                className="flex-1 px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg hover:bg-gray-50"
                             >
                                 Atrás
                             </button>
@@ -5790,29 +5818,29 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
                 {/* Paso 3: Seleccionar perfil y modo */}
                 {paso === 3 && (
-                    <div className="space-y-4">
-                        <h3 className="text-lg font-semibold">Asigna un perfil y elige el modo de revisión</h3>
+                    <div className="space-y-3 sm:space-y-4">
+                        <h3 className="text-sm sm:text-lg font-semibold">Perfil y modo</h3>
 
                         {/* Selector de Perfil */}
                         <div>
-                            <p className="text-sm font-medium text-gray-700 mb-2">Perfil:</p>
-                            <div className="grid grid-cols-1 gap-3">
+                            <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Perfil:</p>
+                            <div className="grid grid-cols-1 gap-2 sm:gap-3">
                                 {perfiles.map(perfil => (
                                     <button
                                         key={perfil.id}
                                         onClick={() => setPerfilSeleccionado(perfil.id)}
-                                        className={`p-4 rounded-lg border-2 transition-colors ${
+                                        className={`p-2.5 sm:p-4 rounded-lg border-2 transition-colors ${
                                             perfilSeleccionado === perfil.id
                                                 ? 'border-indigo-600 bg-indigo-50'
                                                 : 'border-gray-200 hover:border-indigo-300'
                                         }`}
                                     >
-                                        <div className="flex items-center space-x-3">
+                                        <div className="flex items-center space-x-2 sm:space-x-3">
                                             <div
-                                                className="w-4 h-4 rounded-full"
+                                                className="w-3 h-3 sm:w-4 sm:h-4 rounded-full"
                                                 style={{ backgroundColor: perfil.color }}
                                             />
-                                            <span className="font-semibold">{perfil.nombre}</span>
+                                            <span className="font-semibold text-sm sm:text-base">{perfil.nombre}</span>
                                         </div>
                                     </button>
                                 ))}
@@ -5820,39 +5848,39 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                         </div>
 
                         {/* Selector de Modo de Revisión */}
-                        <div className="border-t pt-4">
-                            <p className="text-sm font-medium text-gray-700 mb-2">Modo de Revisión:</p>
-                            <div className="grid grid-cols-2 gap-3">
+                        <div className="border-t pt-3 sm:pt-4">
+                            <p className="text-xs sm:text-sm font-medium text-gray-700 mb-2">Modo:</p>
+                            <div className="grid grid-cols-2 gap-2 sm:gap-3">
                                 <button
                                     onClick={() => setModoRevision('auto')}
-                                    className={`p-4 rounded-lg border-2 transition-colors ${
+                                    className={`p-2 sm:p-4 rounded-lg border-2 transition-colors ${
                                         modoRevision === 'auto'
                                             ? 'border-green-600 bg-green-50'
                                             : 'border-gray-200 hover:border-green-300'
                                     }`}
                                 >
                                     <div className="text-center">
-                                        <span className="text-3xl block mb-2">⚡</span>
-                                        <p className="font-semibold text-gray-800">Automático</p>
-                                        <p className="text-xs text-gray-600 mt-1">
-                                            Carga rápida con categorización automática. Revisión opcional al final.
+                                        <span className="text-xl sm:text-3xl block mb-1 sm:mb-2">⚡</span>
+                                        <p className="font-semibold text-gray-800 text-xs sm:text-base">Auto</p>
+                                        <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">
+                                            Carga rápida con categorización automática.
                                         </p>
                                     </div>
                                 </button>
 
                                 <button
                                     onClick={() => setModoRevision('manual')}
-                                    className={`p-4 rounded-lg border-2 transition-colors ${
+                                    className={`p-2 sm:p-4 rounded-lg border-2 transition-colors ${
                                         modoRevision === 'manual'
                                             ? 'border-blue-600 bg-blue-50'
                                             : 'border-gray-200 hover:border-blue-300'
                                     }`}
                                 >
                                     <div className="text-center">
-                                        <span className="text-3xl block mb-2">👁️</span>
-                                        <p className="font-semibold text-gray-800">Manual</p>
-                                        <p className="text-xs text-gray-600 mt-1">
-                                            Revisa y edita cada transacción una por una antes de guardar.
+                                        <span className="text-xl sm:text-3xl block mb-1 sm:mb-2">👁️</span>
+                                        <p className="font-semibold text-gray-800 text-xs sm:text-base">Manual</p>
+                                        <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1 hidden sm:block">
+                                            Revisa cada transacción una por una.
                                         </p>
                                     </div>
                                 </button>
@@ -10486,10 +10514,10 @@ const GraficoProyeccionAhorro = memo(({ proyeccion, metas }) => {
 
             return (
                 <AppContext.Provider value={contextValue}>
-                    <div className="flex min-h-screen">
+                    <div className="flex min-h-screen overflow-x-hidden">
                         <Sidebar />
-                        <main className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'lg:ml-64' : 'lg:ml-16'} ml-0`}>
-                            <div className="p-4 sm:p-6 pt-20 lg:pt-6">
+                        <main className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'lg:ml-64' : 'lg:ml-16'} ml-0 w-full max-w-full overflow-x-hidden`}>
+                            <div className="p-3 sm:p-4 lg:p-6 pt-16 lg:pt-6 max-w-full">
                                 {currentPage === 'home' && <Home />}
                                 {currentPage === 'ingresos' && <Ingresos />}
                                 {currentPage === 'reembolsos' && <Reembolsos />}

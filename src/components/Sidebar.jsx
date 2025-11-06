@@ -52,25 +52,23 @@ const Sidebar = () => {
 
     return (
         <>
-            {/* Botón Hamburguesa para Mobile */}
-            <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="fixed top-4 left-4 z-50 lg:hidden p-3 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700"
-                aria-label="Toggle menu"
-            >
-                <svg
-                    className="w-6 h-6 text-gray-700 dark:text-gray-300"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+            {/* Botón Hamburguesa para Mobile - Mejorado */}
+            {!isSidebarOpen && (
+                <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="fixed top-3 left-3 z-50 lg:hidden p-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg transition-all"
+                    aria-label="Abrir menú"
                 >
-                    {isSidebarOpen ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                    )}
-                </svg>
-            </button>
+                    <svg
+                        className="w-5 h-5 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+            )}
 
             {/* Sidebar - Responsive */}
             <aside
@@ -81,13 +79,13 @@ const Sidebar = () => {
                     boxShadow: '2px 0 8px rgba(0, 0, 0, 0.05)'
                 }}
             >
-                {/* Header minimalista */}
-                <div className={`border-b border-gray-100 dark:border-slate-700 flex-shrink-0 ${isSidebarOpen ? 'p-6' : 'p-2'}`}>
+                {/* Header minimalista - Responsive */}
+                <div className={`border-b border-gray-100 dark:border-slate-700 flex-shrink-0 ${isSidebarOpen ? 'p-4 lg:p-6' : 'p-2'}`}>
                     <div className="flex items-center justify-between">
                         {isSidebarOpen ? (
                             <div className="animate-slideIn flex-1">
-                                <LogoFinzi className="text-gray-900 dark:text-white mb-2" />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">v3.2 - Gastos TC</p>
+                                <LogoFinzi className="text-gray-900 dark:text-white mb-1 scale-90 lg:scale-100" />
+                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium hidden lg:block">v3.2 - Gastos TC</p>
                             </div>
                         ) : (
                             <div className="mx-auto">
@@ -96,17 +94,17 @@ const Sidebar = () => {
                         )}
                         {isSidebarOpen && (
                             <button
-                                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all ml-2"
-                                aria-label="Contraer menú"
+                                onClick={() => setIsSidebarOpen(false)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-all ml-2 lg:hidden"
+                                aria-label="Cerrar menú"
                             >
                                 <svg
-                                    className="w-5 h-5 transition-transform duration-300"
+                                    className="w-5 h-5"
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
                                 >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         )}
@@ -129,17 +127,23 @@ const Sidebar = () => {
                     )}
                 </div>
 
-                {/* Menu Items minimalistas */}
-                <nav className={`space-y-2 overflow-y-auto flex-1 ${isSidebarOpen ? 'p-4' : 'p-1'}`} style={{ maxHeight: 'calc(100vh - 200px)' }}>
+                {/* Menu Items minimalistas - Mobile optimizado */}
+                <nav className={`space-y-1 lg:space-y-2 overflow-y-auto flex-1 ${isSidebarOpen ? 'p-2 lg:p-4' : 'p-1'}`} style={{ maxHeight: 'calc(100vh - 200px)' }}>
                     {menuItems.map((item, index) => {
                         const isActive = currentPage === item.id;
 
                         return (
                             <button
                                 key={item.id}
-                                onClick={() => setCurrentPage(item.id)}
-                                className={`w-full flex items-center rounded-xl transition-all duration-300 group relative ${
-                                    isSidebarOpen ? 'space-x-3 px-4 py-3' : 'justify-center py-3 px-2'
+                                onClick={() => {
+                                    setCurrentPage(item.id);
+                                    // Cerrar sidebar en mobile después de seleccionar
+                                    if (window.innerWidth < 1024) {
+                                        setIsSidebarOpen(false);
+                                    }
+                                }}
+                                className={`w-full flex items-center rounded-lg lg:rounded-xl transition-all duration-300 group relative ${
+                                    isSidebarOpen ? 'space-x-2 lg:space-x-3 px-3 lg:px-4 py-2 lg:py-3' : 'justify-center py-3 px-2'
                                 } ${
                                     isActive
                                         ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
@@ -150,25 +154,25 @@ const Sidebar = () => {
                                 {/* Barra lateral para item activo */}
                                 {isActive && (
                                     <div
-                                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-indigo-600 rounded-r-full"
+                                        className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 lg:h-8 bg-indigo-600 rounded-r-full"
                                     />
                                 )}
 
-                                {/* Icono */}
+                                {/* Icono - más pequeño en mobile */}
                                 <span
-                                    className="text-2xl flex-shrink-0 transition-transform group-hover:scale-110"
+                                    className="text-xl lg:text-2xl flex-shrink-0 transition-transform group-hover:scale-110"
                                 >
                                     {item.icon}
                                 </span>
 
                                 {isSidebarOpen && (
-                                    <div className="flex-1 text-left">
-                                        <p className={`font-bold text-sm ${
+                                    <div className="flex-1 text-left min-w-0">
+                                        <p className={`font-bold text-xs lg:text-sm truncate ${
                                             isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-300'
                                         }`}>
                                             {item.label}
                                         </p>
-                                        <p className={`text-xs ${
+                                        <p className={`text-xs hidden lg:block ${
                                             isActive ? 'text-indigo-400 dark:text-indigo-500' : 'text-gray-500 dark:text-gray-400'
                                         }`}>
                                             {item.description}
