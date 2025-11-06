@@ -33,6 +33,7 @@ const archivos = [
     { path: 'utils/budgetCalculator.js', marker: '/* INJECT:utils/budgetCalculator.js */' },
     { path: 'utils/projections.js', marker: '/* INJECT:utils/projections.js */' },
     { path: 'utils/reconciliation.js', marker: '/* INJECT:utils/reconciliation.js */' },
+    { path: 'utils/pdfParser.js', marker: '/* INJECT:utils/pdfParser.js */' },
 
     // Firebase (v3.3)
     { path: 'utils/firebase-config.js', marker: '/* INJECT:utils/firebase-config.js */' },
@@ -64,7 +65,8 @@ const archivos = [
     { path: 'components/Proyecciones.jsx', marker: '/* INJECT:components/Proyecciones.jsx */' },
     { path: 'components/TourGuide.jsx', marker: '/* INJECT:components/TourGuide.jsx */' },
     { path: 'components/EntradaRapida.jsx', marker: '/* INJECT:components/EntradaRapida.jsx */' },
-    { path: 'components/Reconciliacion.jsx', marker: '/* INJECT:components/Reconciliacion.jsx */' }
+    { path: 'components/Reconciliacion.jsx', marker: '/* INJECT:components/Reconciliacion.jsx */' },
+    { path: 'components/ModalCargarPDF.jsx', marker: '/* INJECT:components/ModalCargarPDF.jsx */' }
 ];
 
 // Inyectar archivos

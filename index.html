@@ -29,6 +29,13 @@
     <!-- Dexie.js para IndexedDB -->
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
 
+    <!-- PDF.js para lectura de PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Configurar worker de PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
     <!-- Firebase SDK v9 (Compat para compatibilidad) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -2770,6 +2777,321 @@ window.ejecutarReconciliacion = async function(mesAnio) {
 
     </script>
 
+    <script>
+        // Parser de PDF para Estados de Cuenta - Finzi v3.5
+// Extrae texto de PDFs y parsea transacciones por banco
+
+/**
+ * Extrae todo el texto de un archivo PDF
+ * @param {File} file - Archivo PDF
+ * @returns {Promise<string>} - Texto completo del PDF
+ */
+window.extractTextFromPDF = async function(file) {
+    try {
+        // Convertir archivo a ArrayBuffer
+        const arrayBuffer = await file.arrayBuffer();
+
+        // Cargar el PDF con PDF.js
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+        let fullText = '';
+
+        // Iterar por todas las páginas
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            const page = await pdf.getPage(pageNum);
+            const textContent = await page.getTextContent();
+
+            // Extraer texto de cada item
+            const pageText = textContent.items
+                .map(item => item.str)
+                .join(' ');
+
+            fullText += pageText + '\n';
+        }
+
+        return fullText;
+    } catch (error) {
+        console.error('Error al extraer texto del PDF:', error);
+        throw new Error('No se pudo leer el PDF. Asegúrate de que sea un PDF válido con texto seleccionable.');
+    }
+};
+
+/**
+ * Detecta automáticamente el banco basado en el contenido del PDF
+ * @param {string} texto - Texto completo del PDF
+ * @returns {string|null} - ID del banco detectado o null
+ */
+window.detectarBanco = function(texto) {
+    const textoLower = texto.toLowerCase();
+
+    // Patrones de detección por banco
+    const patrones = {
+        'santander': ['banco santander', 'santander chile', 'www.santander.cl'],
+        'bci': ['banco bci', 'bci.cl', 'banco de crédito'],
+        'chile': ['banco de chile', 'bancochile.cl', 'banco chile'],
+        'estado': ['bancoestado', 'banco estado', 'estado.cl'],
+        'scotiabank': ['scotiabank', 'scotia', 'scotiabank.cl'],
+        'itau': ['itaú', 'itau', 'banco itaú'],
+        'security': ['banco security', 'security.cl'],
+        'falabella': ['banco falabella', 'cmr falabella', 'falabella.com'],
+        'ripley': ['banco ripley', 'tarjeta ripley', 'ripley.cl']
+    };
+
+    for (const [banco, keywords] of Object.entries(patrones)) {
+        for (const keyword of keywords) {
+            if (textoLower.includes(keyword)) {
+                return banco;
+            }
+        }
+    }
+
+    return null;
+};
+
+/**
+ * Normaliza un monto de texto a número
+ * Maneja formatos: $1.234.567, 1234567, $1,234,567
+ * @param {string} montoStr - Monto como string
+ * @returns {number} - Monto como número
+ */
+function normalizarMonto(montoStr) {
+    if (!montoStr) return 0;
+
+    // Eliminar símbolos de moneda y espacios
+    let cleaned = montoStr.replace(/[$\s]/g, '');
+
+    // Detectar si usa punto o coma como separador decimal
+    // En Chile normalmente es: 1.234.567 (punto para miles)
+    // Eliminar puntos de miles
+    cleaned = cleaned.replace(/\./g, '');
+
+    // Si tiene coma, es el decimal (reemplazar por punto)
+    cleaned = cleaned.replace(/,/g, '.');
+
+    const numero = parseFloat(cleaned);
+    return isNaN(numero) ? 0 : Math.abs(numero);
+}
+
+/**
+ * Normaliza una fecha de texto a formato YYYY-MM-DD
+ * Maneja formatos: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+ * @param {string} fechaStr - Fecha como string
+ * @param {number} anio - Año por defecto si no viene en la fecha
+ * @returns {string} - Fecha en formato YYYY-MM-DD
+ */
+function normalizarFecha(fechaStr, anio = new Date().getFullYear()) {
+    if (!fechaStr) return new Date().toISOString().split('T')[0];
+
+    // Patrones de fecha: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, DD/MM
+    const patterns = [
+        /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/,  // DD/MM/YYYY
+        /(\d{1,2})[\/\-\.](\d{1,2})$/                 // DD/MM
+    ];
+
+    for (const pattern of patterns) {
+        const match = fechaStr.match(pattern);
+        if (match) {
+            const dia = match[1].padStart(2, '0');
+            const mes = match[2].padStart(2, '0');
+            const year = match[3] || anio;
+            return `${year}-${mes}-${dia}`;
+        }
+    }
+
+    return new Date().toISOString().split('T')[0];
+}
+
+// =============================================================================
+// PARSERS ESPECÍFICOS POR BANCO
+// =============================================================================
+
+/**
+ * Parser genérico - intenta detectar patrones comunes
+ * Formato esperado: FECHA DESCRIPCION MONTO
+ */
+window.parsearBancoGenerico = function(texto, mesAnio) {
+    const transacciones = [];
+
+    // Separar por líneas
+    const lineas = texto.split('\n');
+
+    // Patrón genérico: buscar líneas con fecha y monto
+    // Ejemplo: "05/11/2024 MERCADONA CHILE $45.000"
+    const patron = /(\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{4})?)\s+(.+?)\s+([\$\d\.,]+)/g;
+
+    for (const linea of lineas) {
+        const matches = [...linea.matchAll(patron)];
+
+        for (const match of matches) {
+            const fecha = normalizarFecha(match[1], parseInt(mesAnio.split('-')[0]));
+            const descripcion = match[2].trim();
+            const monto = normalizarMonto(match[3]);
+
+            if (monto > 0 && descripcion.length > 2) {
+                transacciones.push({
+                    fecha: fecha,
+                    descripcion: descripcion,
+                    comercio: descripcion.substring(0, 50), // Tomar primeros 50 chars como comercio
+                    monto: monto
+                });
+            }
+        }
+    }
+
+    return transacciones;
+};
+
+/**
+ * Parser para Banco Santander
+ * Personaliza según el formato específico del PDF de Santander
+ */
+window.parsearBancoSantander = function(texto, mesAnio) {
+    console.log('Usando parser de Santander');
+    // Por ahora usa el genérico, se personalizará cuando tengamos un ejemplo real
+    return window.parsearBancoGenerico(texto, mesAnio);
+};
+
+/**
+ * Parser para Banco BCI
+ * Personaliza según el formato específico del PDF de BCI
+ */
+window.parsearBancoBCI = function(texto, mesAnio) {
+    console.log('Usando parser de BCI');
+    // Por ahora usa el genérico, se personalizará cuando tengamos un ejemplo real
+    return window.parsearBancoGenerico(texto, mesAnio);
+};
+
+/**
+ * Parser para Banco de Chile
+ * Personaliza según el formato específico del PDF de Banco de Chile
+ */
+window.parsearBancoChile = function(texto, mesAnio) {
+    console.log('Usando parser de Banco de Chile');
+    return window.parsearBancoGenerico(texto, mesAnio);
+};
+
+/**
+ * Parser para Banco Estado
+ * Personaliza según el formato específico del PDF de Banco Estado
+ */
+window.parsearBancoEstado = function(texto, mesAnio) {
+    console.log('Usando parser de Banco Estado');
+    return window.parsearBancoGenerico(texto, mesAnio);
+};
+
+/**
+ * Parser para Scotiabank
+ */
+window.parsearBancoScotiabank = function(texto, mesAnio) {
+    console.log('Usando parser de Scotiabank');
+    return window.parsearBancoGenerico(texto, mesAnio);
+};
+
+/**
+ * Parser para Banco Falabella (CMR)
+ */
+window.parsearBancoFalabella = function(texto, mesAnio) {
+    console.log('Usando parser de Falabella');
+    return window.parsearBancoGenerico(texto, mesAnio);
+};
+
+/**
+ * Parser para Banco Ripley
+ */
+window.parsearBancoRipley = function(texto, mesAnio) {
+    console.log('Usando parser de Ripley');
+    return window.parsearBancoGenerico(texto, mesAnio);
+};
+
+/**
+ * Función principal para parsear PDF según el banco
+ * @param {File} file - Archivo PDF
+ * @param {string} bancoId - ID del banco (o null para auto-detectar)
+ * @param {string} mesAnio - Mes en formato YYYY-MM
+ * @returns {Promise<Object>} - { transacciones, bancoDetectado }
+ */
+window.parsearPDF = async function(file, bancoId, mesAnio) {
+    try {
+        // 1. Extraer texto del PDF
+        const texto = await window.extractTextFromPDF(file);
+
+        if (!texto || texto.trim().length < 100) {
+            throw new Error('El PDF parece estar vacío o no tiene texto extraíble. Intenta con un PDF diferente o usa el CSV.');
+        }
+
+        // 2. Detectar banco si no se especificó
+        const bancoDetectado = bancoId || window.detectarBanco(texto);
+
+        if (!bancoDetectado) {
+            console.warn('No se pudo detectar el banco automáticamente, usando parser genérico');
+        }
+
+        // 3. Seleccionar parser según el banco
+        const parsers = {
+            'santander': window.parsearBancoSantander,
+            'bci': window.parsearBancoBCI,
+            'chile': window.parsearBancoChile,
+            'estado': window.parsearBancoEstado,
+            'scotiabank': window.parsearBancoScotiabank,
+            'falabella': window.parsearBancoFalabella,
+            'ripley': window.parsearBancoRipley
+        };
+
+        const parser = parsers[bancoDetectado] || window.parsearBancoGenerico;
+
+        // 4. Parsear transacciones
+        const transacciones = parser(texto, mesAnio);
+
+        if (transacciones.length === 0) {
+            throw new Error('No se encontraron transacciones en el PDF. Verifica que el formato sea correcto o usa el CSV.');
+        }
+
+        return {
+            transacciones: transacciones,
+            bancoDetectado: bancoDetectado,
+            totalTransacciones: transacciones.length
+        };
+
+    } catch (error) {
+        console.error('Error al parsear PDF:', error);
+        throw error;
+    }
+};
+
+/**
+ * Validar que un archivo sea un PDF válido
+ * @param {File} file - Archivo a validar
+ * @returns {Promise<Object>} - { valido: boolean, error: string }
+ */
+window.validarPDF = async function(file) {
+    if (!file) {
+        return { valido: false, error: 'No se seleccionó ningún archivo' };
+    }
+
+    if (file.type !== 'application/pdf') {
+        return { valido: false, error: 'El archivo debe ser un PDF' };
+    }
+
+    if (file.size > 10 * 1024 * 1024) { // 10 MB
+        return { valido: false, error: 'El archivo es demasiado grande (máximo 10 MB)' };
+    }
+
+    try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+        if (pdf.numPages === 0) {
+            return { valido: false, error: 'El PDF no tiene páginas' };
+        }
+
+        return { valido: true };
+    } catch (error) {
+        return { valido: false, error: 'El archivo PDF está corrupto o no es válido' };
+    }
+};
+
+    </script>
+
     <!-- FIREBASE (v3.3) -->
     <script>
         /**
@@ -4623,6 +4945,7 @@ const Home = () => {
     const [showSelectorMeses, setShowSelectorMeses] = useState(false);
     const [showMenuFAB, setShowMenuFAB] = useState(false);
     const [showModalEntradaRapida, setShowModalEntradaRapida] = useState(false);
+    const [showModalCargarPDF, setShowModalCargarPDF] = useState(false);
 
     // Cargar datos cuando cambian los meses seleccionados
     useEffect(() => {
@@ -5249,6 +5572,18 @@ const Home = () => {
                             <span className="font-semibold">Entrada Rápida</span>
                         </button>
 
+                        {/* Opción: Cargar PDF */}
+                        <button
+                            onClick={() => {
+                                setShowModalCargarPDF(true);
+                                setShowMenuFAB(false);
+                            }}
+                            className="flex items-center space-x-3 bg-white dark:bg-slate-800 text-gray-800 dark:text-white px-5 py-3 rounded-full shadow-xl hover:bg-purple-50 dark:hover:bg-slate-700 transition-all transform hover:scale-105 whitespace-nowrap border-2 border-purple-200 dark:border-purple-800"
+                        >
+                            <span className="text-2xl">📑</span>
+                            <span className="font-semibold">Cargar PDF</span>
+                        </button>
+
                         {/* Opción: Cargar CSV */}
                         <button
                             onClick={() => {
@@ -5297,6 +5632,19 @@ const Home = () => {
                         await cargarDatosDeMeses();
                         setShowModalEntradaRapida(false);
                         mostrarToast('Gasto provisional agregado exitosamente 🟠', 'success');
+                    }}
+                />
+            )}
+
+            {/* Modal Cargar PDF */}
+            {showModalCargarPDF && (
+                <ModalCargarPDF
+                    onClose={() => setShowModalCargarPDF(false)}
+                    onSuccess={async () => {
+                        await refreshMesesCargados();
+                        await cargarDatosDeMeses();
+                        setShowModalCargarPDF(false);
+                        mostrarToast('Transacciones del PDF cargadas exitosamente 📑', 'success');
                     }}
                 />
             )}
@@ -12176,6 +12524,381 @@ const Reconciliacion = ({ resultado, onConfirmar, onCancelar }) => {
                         Confirmar Reconciliación
                     </button>
                 </div>
+            </div>
+        </Modal>
+    );
+};
+
+    </script>
+
+    <script type="text/babel">
+        // Modal para Cargar PDF del Estado de Cuenta - Finzi v3.5
+
+const ModalCargarPDF = ({ onClose, onSuccess }) => {
+    const { perfiles } = useApp();
+    const [paso, setPaso] = useState(1); // 1: Mes/año + Banco, 2: Subir PDF, 3: Preview, 4: Confirmar
+    const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
+    const [mesSeleccionado, setMesSeleccionado] = useState(null);
+    const [archivo, setArchivo] = useState(null);
+    const [bancoSeleccionado, setBancoSeleccionado] = useState('');
+    const [perfilSeleccionado, setPerfilSeleccionado] = useState(perfiles[0]?.id || 1);
+    const [transaccionesParsed, setTransaccionesParsed] = useState([]);
+    const [procesando, setProcesando] = useState(false);
+    const [error, setError] = useState(null);
+
+    const aniosDisponibles = [new Date().getFullYear(), new Date().getFullYear() - 1];
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+    // Lista de bancos disponibles
+    const bancos = [
+        { id: 'santander', nombre: 'Banco Santander', icon: '🏦' },
+        { id: 'bci', nombre: 'Banco BCI', icon: '🏦' },
+        { id: 'chile', nombre: 'Banco de Chile', icon: '🏦' },
+        { id: 'estado', nombre: 'BancoEstado', icon: '🏦' },
+        { id: 'scotiabank', nombre: 'Scotiabank', icon: '🏦' },
+        { id: 'falabella', nombre: 'Banco Falabella (CMR)', icon: '💳' },
+        { id: 'ripley', nombre: 'Banco Ripley', icon: '💳' },
+        { id: 'itau', nombre: 'Itaú', icon: '🏦' },
+        { id: 'generico', nombre: 'Otro / No sé', icon: '📄' }
+    ];
+
+    const handleArchivoChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setError(null);
+        setProcesando(true);
+
+        try {
+            // Validar PDF
+            const validacion = await validarPDF(file);
+            if (!validacion.valido) {
+                setError(validacion.error);
+                setProcesando(false);
+                return;
+            }
+
+            setArchivo(file);
+            setProcesando(false);
+            setPaso(3); // Ir a preview
+
+            // Parsear automáticamente
+            await parsearPDF();
+
+        } catch (err) {
+            setError(err.message || 'Error al procesar el archivo');
+            setProcesando(false);
+        }
+    };
+
+    const parsearPDF = async () => {
+        if (!archivo || mesSeleccionado === null) return;
+
+        setProcesando(true);
+        setError(null);
+
+        try {
+            const mesAnio = `${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2, '0')}`;
+
+            // Parsear PDF con el banco seleccionado
+            const resultado = await window.parsearPDF(archivo, bancoSeleccionado === 'generico' ? null : bancoSeleccionado, mesAnio);
+
+            // Categorizar automáticamente las transacciones
+            const transaccionesCategorizadas = resultado.transacciones.map(t => {
+                const categoriaSugerida = categorizarAutomatico(t.descripcion);
+
+                return {
+                    ...t,
+                    categoria: categoriaSugerida,
+                    perfilId: perfilSeleccionado,
+                    esCompartido: false,
+                    esReembolsable: false,
+                    reembolsoId: null
+                };
+            });
+
+            setTransaccionesParsed(transaccionesCategorizadas);
+            setProcesando(false);
+
+            // Mostrar info del banco detectado
+            if (resultado.bancoDetectado && bancoSeleccionado === 'generico') {
+                const bancoInfo = bancos.find(b => b.id === resultado.bancoDetectado);
+                if (bancoInfo) {
+                    setError(`✓ Banco detectado automáticamente: ${bancoInfo.nombre}`);
+                }
+            }
+
+        } catch (err) {
+            console.error('Error al parsear PDF:', err);
+            setError(err.message || 'No se pudieron extraer las transacciones del PDF');
+            setProcesando(false);
+        }
+    };
+
+    const handleGuardar = async () => {
+        setProcesando(true);
+        try {
+            const mesAnio = `${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2, '0')}`;
+
+            // Obtener o crear mes
+            const mesAnioId = await getOrCreateMesAnio(mesAnio);
+
+            // Agregar transacciones (marcadas como 'csv' y 'confirmado')
+            const transaccionesParaGuardar = transaccionesParsed.map(t => ({
+                ...t,
+                mesAnioId,
+                origen: 'csv',
+                estado: 'confirmado',
+                textoOriginal: null,
+                transaccionRelacionadaId: null
+            }));
+
+            await addTransacciones(transaccionesParaGuardar);
+
+            // Crear presupuestos base si no existen
+            const presupuestosExistentes = await getPresupuestos(mesAnioId);
+            if (presupuestosExistentes.length === 0) {
+                const plantilla = await getPresupuestos(null);
+                if (plantilla.length > 0) {
+                    await savePresupuestos(plantilla.map(p => ({
+                        categoria: p.categoria,
+                        monto: p.monto
+                    })), mesAnioId);
+                }
+            }
+
+            // RECONCILIACIÓN: Buscar transacciones manuales provisionales de este mes
+            const resultado = await window.ejecutarReconciliacion(mesAnio);
+
+            setProcesando(false);
+
+            // Si hay transacciones para reconciliar, cerrar este modal y mostrar reconciliación
+            if (resultado.totalManuales > 0) {
+                // TODO: Mostrar modal de reconciliación
+                onSuccess(mesAnioId);
+                onClose();
+            } else {
+                onSuccess(mesAnioId);
+                onClose();
+            }
+
+        } catch (err) {
+            console.error('Error al guardar:', err);
+            setError('Error al guardar las transacciones');
+            setProcesando(false);
+        }
+    };
+
+    return (
+        <Modal
+            isOpen={true}
+            onClose={onClose}
+            title="Cargar PDF"
+            size="md"
+        >
+            <div className="space-y-4">
+                {/* Indicador de pasos */}
+                <div className="flex items-center justify-between">
+                    {[1, 2, 3].map(num => (
+                        <div key={num} className="flex items-center flex-1">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                                paso >= num ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'
+                            }`}>
+                                {num}
+                            </div>
+                            {num < 3 && (
+                                <div className={`flex-1 h-1 mx-2 ${
+                                    paso > num ? 'bg-indigo-600' : 'bg-gray-200'
+                                }`} />
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                {/* Error */}
+                {error && (
+                    <div className={`p-3 rounded-lg ${
+                        error.startsWith('✓')
+                            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                            : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                    }`}>
+                        <p className={`text-sm ${
+                            error.startsWith('✓')
+                                ? 'text-green-800 dark:text-green-300'
+                                : 'text-red-800 dark:text-red-300'
+                        }`}>
+                            {error}
+                        </p>
+                    </div>
+                )}
+
+                {/* Paso 1: Seleccionar Mes/Año y Banco */}
+                {paso === 1 && (
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Selecciona el mes del estado de cuenta
+                            </label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {meses.map((mes, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => setMesSeleccionado(index)}
+                                        className={`py-2 px-2 rounded-lg font-semibold text-sm transition-colors ${
+                                            mesSeleccionado === index
+                                                ? 'bg-indigo-600 text-white'
+                                                : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                                        }`}
+                                    >
+                                        {mes}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Año
+                            </label>
+                            <div className="grid grid-cols-2 gap-3">
+                                {aniosDisponibles.map(anio => (
+                                    <button
+                                        key={anio}
+                                        onClick={() => setAnioSeleccionado(anio)}
+                                        className={`py-3 px-4 rounded-lg font-semibold transition-colors ${
+                                            anioSeleccionado === anio
+                                                ? 'bg-indigo-600 text-white'
+                                                : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                                        }`}
+                                    >
+                                        {anio}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Selecciona tu banco
+                            </label>
+                            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                                {bancos.map(banco => (
+                                    <button
+                                        key={banco.id}
+                                        onClick={() => setBancoSeleccionado(banco.id)}
+                                        className={`py-3 px-3 rounded-lg font-semibold text-sm transition-colors text-left flex items-center space-x-2 ${
+                                            bancoSeleccionado === banco.id
+                                                ? 'bg-indigo-600 text-white'
+                                                : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600'
+                                        }`}
+                                    >
+                                        <span className="text-xl">{banco.icon}</span>
+                                        <span className="flex-1">{banco.nombre}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => setPaso(2)}
+                            disabled={mesSeleccionado === null || !bancoSeleccionado}
+                            className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                        >
+                            Continuar
+                        </button>
+                    </div>
+                )}
+
+                {/* Paso 2: Subir PDF */}
+                {paso === 2 && (
+                    <div className="space-y-4">
+                        <div className="text-center">
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                                Sube el PDF del estado de cuenta de <span className="font-bold">{meses[mesSeleccionado]} {anioSeleccionado}</span>
+                            </p>
+                            <input
+                                type="file"
+                                accept=".pdf"
+                                onChange={handleArchivoChange}
+                                className="hidden"
+                                id="pdf-upload"
+                            />
+                            <label
+                                htmlFor="pdf-upload"
+                                className="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 cursor-pointer font-semibold"
+                            >
+                                📑 Seleccionar PDF
+                            </label>
+                        </div>
+
+                        <button
+                            onClick={() => setPaso(1)}
+                            className="w-full px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                        >
+                            Volver
+                        </button>
+                    </div>
+                )}
+
+                {/* Paso 3: Preview */}
+                {paso === 3 && (
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                                Transacciones encontradas: {transaccionesParsed.length}
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                Revisa que las transacciones se hayan extraído correctamente
+                            </p>
+                        </div>
+
+                        {/* Lista de transacciones */}
+                        <div className="max-h-96 overflow-y-auto space-y-2">
+                            {transaccionesParsed.slice(0, 10).map((t, index) => (
+                                <div key={index} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                                                {t.comercio}
+                                            </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                {t.fecha} • {t.categoria}
+                                            </p>
+                                        </div>
+                                        <p className="font-bold text-gray-900 dark:text-white">
+                                            {formatearMonto(t.monto)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                            {transaccionesParsed.length > 10 && (
+                                <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+                                    ... y {transaccionesParsed.length - 10} más
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={() => {
+                                    setPaso(2);
+                                    setArchivo(null);
+                                    setTransaccionesParsed([]);
+                                }}
+                                className="flex-1 px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                            >
+                                Cambiar PDF
+                            </button>
+                            <button
+                                onClick={handleGuardar}
+                                disabled={procesando || transaccionesParsed.length === 0}
+                                className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-semibold"
+                            >
+                                {procesando ? 'Guardando...' : `Guardar ${transaccionesParsed.length} Transacciones`}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </Modal>
     );

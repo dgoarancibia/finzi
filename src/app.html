@@ -29,6 +29,13 @@
     <!-- Dexie.js para IndexedDB -->
     <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
 
+    <!-- PDF.js para lectura de PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Configurar worker de PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
     <!-- Firebase SDK v9 (Compat para compatibilidad) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -297,6 +304,10 @@
         /* INJECT:utils/reconciliation.js */
     </script>
 
+    <script>
+        /* INJECT:utils/pdfParser.js */
+    </script>
+
     <!-- FIREBASE (v3.3) -->
     <script>
         /* INJECT:utils/firebase-config.js */
@@ -402,6 +413,10 @@
 
     <script type="text/babel">
         /* INJECT:components/Reconciliacion.jsx */
+    </script>
+
+    <script type="text/babel">
+        /* INJECT:components/ModalCargarPDF.jsx */
     </script>
 
     <!-- APP PRINCIPAL -->

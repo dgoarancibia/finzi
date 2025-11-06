@@ -17,6 +17,7 @@ const Home = () => {
     const [showSelectorMeses, setShowSelectorMeses] = useState(false);
     const [showMenuFAB, setShowMenuFAB] = useState(false);
     const [showModalEntradaRapida, setShowModalEntradaRapida] = useState(false);
+    const [showModalCargarPDF, setShowModalCargarPDF] = useState(false);
 
     // Cargar datos cuando cambian los meses seleccionados
     useEffect(() => {
@@ -643,6 +644,18 @@ const Home = () => {
                             <span className="font-semibold">Entrada Rápida</span>
                         </button>
 
+                        {/* Opción: Cargar PDF */}
+                        <button
+                            onClick={() => {
+                                setShowModalCargarPDF(true);
+                                setShowMenuFAB(false);
+                            }}
+                            className="flex items-center space-x-3 bg-white dark:bg-slate-800 text-gray-800 dark:text-white px-5 py-3 rounded-full shadow-xl hover:bg-purple-50 dark:hover:bg-slate-700 transition-all transform hover:scale-105 whitespace-nowrap border-2 border-purple-200 dark:border-purple-800"
+                        >
+                            <span className="text-2xl">📑</span>
+                            <span className="font-semibold">Cargar PDF</span>
+                        </button>
+
                         {/* Opción: Cargar CSV */}
                         <button
                             onClick={() => {
@@ -691,6 +704,19 @@ const Home = () => {
                         await cargarDatosDeMeses();
                         setShowModalEntradaRapida(false);
                         mostrarToast('Gasto provisional agregado exitosamente 🟠', 'success');
+                    }}
+                />
+            )}
+
+            {/* Modal Cargar PDF */}
+            {showModalCargarPDF && (
+                <ModalCargarPDF
+                    onClose={() => setShowModalCargarPDF(false)}
+                    onSuccess={async () => {
+                        await refreshMesesCargados();
+                        await cargarDatosDeMeses();
+                        setShowModalCargarPDF(false);
+                        mostrarToast('Transacciones del PDF cargadas exitosamente 📑', 'success');
                     }}
                 />
             )}
