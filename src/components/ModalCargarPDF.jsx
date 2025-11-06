@@ -19,7 +19,7 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
     const bancos = [
         { id: 'santander', nombre: 'Banco Santander', icon: '🏦' },
         { id: 'bci', nombre: 'Banco BCI', icon: '🏦' },
-        { id: 'chile', nombre: 'Banco de Chile', icon: '🏦' },
+        { id: 'chile', nombre: 'Banco de Chile / Edwards', icon: '🏦' },
         { id: 'estado', nombre: 'BancoEstado', icon: '🏦' },
         { id: 'scotiabank', nombre: 'Scotiabank', icon: '🏦' },
         { id: 'falabella', nombre: 'Banco Falabella (CMR)', icon: '💳' },

@@ -48,7 +48,7 @@ window.detectarBanco = function(texto) {
     const patrones = {
         'santander': ['banco santander', 'santander chile', 'www.santander.cl'],
         'bci': ['banco bci', 'bci.cl', 'banco de crédito'],
-        'chile': ['banco de chile', 'bancochile.cl', 'banco chile'],
+        'chile': ['banco de chile', 'bancochile.cl', 'banco chile', 'edwards', 'banco edwards'],
         'estado': ['bancoestado', 'banco estado', 'estado.cl'],
         'scotiabank': ['scotiabank', 'scotia', 'scotiabank.cl'],
         'itau': ['itaú', 'itau', 'banco itaú'],
@@ -173,21 +173,113 @@ window.parsearBancoSantander = function(texto, mesAnio) {
 
 /**
  * Parser para Banco BCI
- * Personaliza según el formato específico del PDF de BCI
+ * Formato típico: DD/MM/YYYY DESCRIPCION MONTO
+ * El PDF de BCI suele tener formato tabular
  */
 window.parsearBancoBCI = function(texto, mesAnio) {
-    console.log('Usando parser de BCI');
-    // Por ahora usa el genérico, se personalizará cuando tengamos un ejemplo real
-    return window.parsearBancoGenerico(texto, mesAnio);
+    console.log('Usando parser específico de BCI');
+    const transacciones = [];
+    const lineas = texto.split('\n');
+
+    // Patrón para BCI: fecha + descripción + monto
+    // Ejemplo: "05/10/2024 MERCADONA SANTIAGO 45.990"
+    const patron = /(\d{2}\/\d{2}\/\d{4})\s+([A-ZÁÉÍÓÚÑ\s\.\-\/]+?)\s+([\d\.]+)(?:\s|$)/gi;
+
+    for (const linea of lineas) {
+        // Saltar líneas de encabezado o totales
+        if (linea.toLowerCase().includes('fecha') ||
+            linea.toLowerCase().includes('total') ||
+            linea.toLowerCase().includes('subtotal') ||
+            linea.toLowerCase().includes('saldo')) {
+            continue;
+        }
+
+        const matches = [...linea.matchAll(patron)];
+
+        for (const match of matches) {
+            const fecha = normalizarFecha(match[1], parseInt(mesAnio.split('-')[0]));
+            const descripcion = match[2].trim();
+            const monto = normalizarMonto(match[3]);
+
+            // Filtrar líneas que no parecen transacciones
+            if (monto > 0 && descripcion.length > 3 && !descripcion.match(/^\d+$/)) {
+                transacciones.push({
+                    fecha: fecha,
+                    descripcion: descripcion,
+                    comercio: descripcion.substring(0, 50),
+                    monto: monto
+                });
+            }
+        }
+    }
+
+    // Si no encontró nada con el patrón específico, usar genérico como fallback
+    if (transacciones.length === 0) {
+        console.log('Parser específico de BCI no encontró transacciones, usando genérico');
+        return window.parsearBancoGenerico(texto, mesAnio);
+    }
+
+    return transacciones;
 };
 
 /**
- * Parser para Banco de Chile
- * Personaliza según el formato específico del PDF de Banco de Chile
+ * Parser para Banco de Chile / Edwards
+ * Formato típico: DD/MM DESCRIPCION MONTO (sin año en algunas columnas)
+ * Edwards es parte de Banco de Chile
  */
 window.parsearBancoChile = function(texto, mesAnio) {
-    console.log('Usando parser de Banco de Chile');
-    return window.parsearBancoGenerico(texto, mesAnio);
+    console.log('Usando parser específico de Banco de Chile/Edwards');
+    const transacciones = [];
+    const lineas = texto.split('\n');
+
+    // Patrones para Banco de Chile/Edwards
+    // Pueden venir con o sin año: "05/10/2024" o "05/10"
+    const patronConAnio = /(\d{2}\/\d{2}\/\d{4})\s+([A-ZÁÉÍÓÚÑ\s\.\-\/]+?)\s+([\d\.]+)(?:\s|$)/gi;
+    const patronSinAnio = /(\d{2}\/\d{2})\s+([A-ZÁÉÍÓÚÑ\s\.\-\/]+?)\s+([\d\.]+)(?:\s|$)/gi;
+
+    for (const linea of lineas) {
+        // Saltar líneas de encabezado o totales
+        if (linea.toLowerCase().includes('fecha') ||
+            linea.toLowerCase().includes('total') ||
+            linea.toLowerCase().includes('subtotal') ||
+            linea.toLowerCase().includes('saldo') ||
+            linea.toLowerCase().includes('cargo') ||
+            linea.toLowerCase().includes('abono')) {
+            continue;
+        }
+
+        // Intentar con patrón con año primero
+        let matches = [...linea.matchAll(patronConAnio)];
+
+        // Si no encuentra, intentar sin año
+        if (matches.length === 0) {
+            matches = [...linea.matchAll(patronSinAnio)];
+        }
+
+        for (const match of matches) {
+            const fecha = normalizarFecha(match[1], parseInt(mesAnio.split('-')[0]));
+            const descripcion = match[2].trim();
+            const monto = normalizarMonto(match[3]);
+
+            // Filtrar líneas que no parecen transacciones
+            if (monto > 0 && descripcion.length > 3 && !descripcion.match(/^\d+$/)) {
+                transacciones.push({
+                    fecha: fecha,
+                    descripcion: descripcion,
+                    comercio: descripcion.substring(0, 50),
+                    monto: monto
+                });
+            }
+        }
+    }
+
+    // Si no encontró nada con el patrón específico, usar genérico como fallback
+    if (transacciones.length === 0) {
+        console.log('Parser específico de Banco Chile/Edwards no encontró transacciones, usando genérico');
+        return window.parsearBancoGenerico(texto, mesAnio);
+    }
+
+    return transacciones;
 };
 
 /**
