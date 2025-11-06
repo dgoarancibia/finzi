@@ -170,6 +170,47 @@
             transform: translateY(-2px);
             box-shadow: 0 12px 20px rgba(0, 0, 0, 0.12), 0 6px 8px rgba(0, 0, 0, 0.08);
         }
+
+        /* Responsive Tables - Mobile Optimization */
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: 0.75rem;
+        }
+
+        .table-responsive table {
+            min-width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .table-responsive table {
+                font-size: 0.875rem;
+            }
+
+            .table-responsive th,
+            .table-responsive td {
+                padding: 0.75rem 0.5rem;
+                white-space: nowrap;
+            }
+        }
+
+        /* Touch Targets - Minimum 44x44px para móviles */
+        @media (max-width: 768px) {
+            button,
+            a,
+            input[type="button"],
+            input[type="submit"] {
+                min-height: 44px;
+                min-width: 44px;
+            }
+        }
+
+        /* Grid Responsive - Auto ajuste en móviles */
+        @media (max-width: 640px) {
+            .grid-responsive {
+                grid-template-columns: 1fr !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -513,8 +554,8 @@
                 <AppContext.Provider value={contextValue}>
                     <div className="flex min-h-screen">
                         <Sidebar />
-                        <main className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'}`}>
-                            <div className="p-6">
+                        <main className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'lg:ml-64' : 'lg:ml-16'} ml-0`}>
+                            <div className="p-4 sm:p-6 pt-20 lg:pt-6">
                                 {currentPage === 'home' && <Home />}
                                 {currentPage === 'ingresos' && <Ingresos />}
                                 {currentPage === 'reembolsos' && <Reembolsos />}

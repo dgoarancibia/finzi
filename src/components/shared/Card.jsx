@@ -12,29 +12,29 @@ const Card = memo(({ title, subtitle, icon, children, className = '', actions = 
     return (
         <div className={`rounded-xl shadow-minimal-md ${variantClasses[variant]} ${className} animate-slideIn hover-lift transition-all duration-300`}>
             {(title || subtitle || icon || actions) && (
-                <div className="p-6 border-b border-gray-100 dark:border-slate-700">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                        <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
                             {icon && (
-                                <div className="text-3xl">
+                                <div className="text-2xl sm:text-3xl flex-shrink-0">
                                     {icon}
                                 </div>
                             )}
-                            <div>
+                            <div className="min-w-0">
                                 {title && (
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white truncate">
                                         {title}
                                     </h3>
                                 )}
                                 {subtitle && (
-                                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1">
                                         {subtitle}
                                     </p>
                                 )}
                             </div>
                         </div>
                         {actions && (
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2 flex-shrink-0">
                                 {actions}
                             </div>
                         )}
@@ -42,7 +42,7 @@ const Card = memo(({ title, subtitle, icon, children, className = '', actions = 
                 </div>
             )}
 
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
                 {children}
             </div>
         </div>
@@ -94,18 +94,18 @@ const CardStat = memo(({ label, value, icon, color = 'indigo', trend = null, sub
     const config = colorConfigs[color] || colorConfigs['indigo'];
 
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-minimal-md p-6 border border-gray-200 dark:border-slate-700 animate-slideIn hover-lift transition-all duration-300">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-minimal-md p-4 sm:p-6 border border-gray-200 dark:border-slate-700 animate-slideIn hover-lift transition-all duration-300">
             <div className="flex items-center justify-between">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">{label}</p>
-                    <p className={`text-3xl font-black ${config.text}`}>{value}</p>
+                    <p className={`text-2xl sm:text-3xl font-black ${config.text} truncate`}>{value}</p>
                     {subtitle && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{subtitle}</p>
                     )}
                 </div>
                 {icon && (
-                    <div className={`p-3 rounded-xl ${config.iconBg} ${config.iconText}`}>
-                        <span className="text-2xl">{icon}</span>
+                    <div className={`p-2 sm:p-3 rounded-xl ${config.iconBg} ${config.iconText} flex-shrink-0`}>
+                        <span className="text-xl sm:text-2xl">{icon}</span>
                     </div>
                 )}
             </div>
