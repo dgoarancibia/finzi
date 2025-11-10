@@ -1891,8 +1891,20 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
             }));
 
             console.log('💾 Guardando transacciones en DB...');
-            await addTransacciones(transaccionesParaGuardar);
-            console.log('✅ Transacciones guardadas exitosamente');
+            console.log('📋 Muestra de transacción a guardar:', transaccionesParaGuardar[0]);
+
+            try {
+                const resultado = await addTransacciones(transaccionesParaGuardar);
+                console.log('✅ Resultado de bulkAdd:', resultado);
+                console.log('✅ Transacciones guardadas exitosamente');
+
+                // Verificar que realmente se guardaron
+                const transVerificacion = await getTransaccionesByMes(mesAnioId);
+                console.log(`🔍 Verificación inmediata: ${transVerificacion.length} transacciones en DB`);
+            } catch (bulkError) {
+                console.error('❌ Error en bulkAdd:', bulkError);
+                throw bulkError;
+            }
 
             // Crear presupuestos base si no existen
             console.log('📊 Verificando presupuestos...');
