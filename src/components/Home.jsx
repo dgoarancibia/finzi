@@ -358,7 +358,16 @@ const Home = () => {
                             const mes = await db.mesesCarga.get(mesAnioId);
                             setSelectedMonth(mes);
                             setSelectedMonths([mes]);
-                            await cargarDatosDeMeses();
+
+                            // Cargar transacciones directamente sin esperar a que selectedMonths se actualice
+                            const trans = await getTransaccionesByMes(mesAnioId);
+                            const pres = await getPresupuestos(mesAnioId);
+                            const ings = await getIngresos(mes.mesAnio);
+
+                            setTransacciones(trans);
+                            setPresupuestos(pres);
+                            setIngresos(ings);
+
                             setShowModalCargarCSV(false);
                             mostrarToast('CSV cargado exitosamente', 'success');
                         }}
@@ -604,7 +613,16 @@ const Home = () => {
                         const mes = await db.mesesCarga.get(mesAnioId);
                         setSelectedMonth(mes);
                         setSelectedMonths([mes]);
-                        await cargarDatosDeMeses();
+
+                        // Cargar transacciones directamente sin esperar a que selectedMonths se actualice
+                        const trans = await getTransaccionesByMes(mesAnioId);
+                        const pres = await getPresupuestos(mesAnioId);
+                        const ings = await getIngresos(mes.mesAnio);
+
+                        setTransacciones(trans);
+                        setPresupuestos(pres);
+                        setIngresos(ings);
+
                         setShowModalCargarCSV(false);
                         mostrarToast('CSV cargado exitosamente', 'success');
                     }}
