@@ -1903,6 +1903,30 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 // Verificar que realmente se guardaron
                 const transVerificacion = await getTransaccionesByMes(mesAnioId);
                 console.log(`🔍 Verificación inmediata: ${transVerificacion.length} transacciones en DB`);
+
+                // DEBUG MANUAL: Inspeccionar DB directamente
+                console.log('🔬 DEBUG: Inspeccionando DB directamente...');
+                const todasLasTrans = await db.transacciones.toArray();
+                console.log(`🔬 Total transacciones en toda la DB: ${todasLasTrans.length}`);
+
+                if (todasLasTrans.length > 0) {
+                    const ultima = todasLasTrans[todasLasTrans.length - 1];
+                    console.log('🔬 Última transacción guardada:', ultima);
+                    console.log(`🔬 mesAnioId de última transacción: ${ultima.mesAnioId} (tipo: ${typeof ultima.mesAnioId})`);
+
+                    const mesAnioIds = [...new Set(todasLasTrans.map(t => t.mesAnioId))];
+                    console.log('🔬 mesAnioIds únicos en DB:', mesAnioIds);
+
+                    // Contar por mesAnioId
+                    const conteo = {};
+                    todasLasTrans.forEach(t => {
+                        conteo[t.mesAnioId] = (conteo[t.mesAnioId] || 0) + 1;
+                    });
+                    console.log('🔬 Conteo por mesAnioId:', conteo);
+
+                    // Verificar el tipo de mesAnioId que estamos buscando
+                    console.log(`🔬 Buscando mesAnioId: ${mesAnioId} (tipo: ${typeof mesAnioId})`);
+                }
             } catch (bulkError) {
                 console.error('❌ Error en bulkAdd:', bulkError);
                 throw bulkError;
