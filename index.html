@@ -5085,7 +5085,16 @@ const Home = () => {
     const [showModalCargarPDF, setShowModalCargarPDF] = useState(false);
 
     // Cargar datos cuando cambian los meses seleccionados
+    const skipNextLoadRef = useRef(false);
+
     useEffect(() => {
+        // WORKAROUND: Evitar reload después de CSV porque onSuccess ya cargó los datos
+        if (skipNextLoadRef.current) {
+            console.log('⏭️ Saltando cargarDatosDeMeses (datos ya cargados por CSV)');
+            skipNextLoadRef.current = false;
+            return;
+        }
+
         if (selectedMonths.length > 0) {
             cargarDatosDeMeses();
         }
@@ -5435,9 +5444,6 @@ const Home = () => {
                             const mes = await db.mesesCarga.get(mesAnioId);
                             console.log('✅ Mes obtenido:', mes);
 
-                            setSelectedMonth(mes);
-                            setSelectedMonths([mes]);
-
                             // Cargar transacciones directamente sin esperar a que selectedMonths se actualice
                             console.log('📊 Cargando transacciones del mes...');
 
@@ -5457,6 +5463,13 @@ const Home = () => {
                             setTransacciones(trans);
                             setPresupuestos(pres);
                             setIngresos(ings);
+
+                            // WORKAROUND: Actualizar selectedMonths DESPUÉS de cargar datos
+                            // y marcar para saltar el próximo useEffect
+                            console.log('🔒 Marcando para saltar próximo useEffect');
+                            skipNextLoadRef.current = true;
+                            setSelectedMonth(mes);
+                            setSelectedMonths([mes]);
 
                             console.log('✅ Estado actualizado, cerrando modal');
                             setShowModalCargarCSV(false);
