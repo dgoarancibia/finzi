@@ -1811,17 +1811,22 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
     };
 
     const handleGuardar = async () => {
+        console.log('🚀 Iniciando guardado de transacciones...');
         setProcesando(true);
         try {
             const mesAnio = `${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2, '0')}`;
+            console.log('📅 Mes/Año:', mesAnio);
 
             // Obtener o crear mes
             const mesAnioId = await getOrCreateMesAnio(mesAnio);
+            console.log('✅ Mes creado/obtenido ID:', mesAnioId);
 
             // Si es modo manual, solo guardar las revisadas
             const transaccionesAGuardar = modoRevision === 'manual'
                 ? transaccionesRevisadas
                 : transaccionesParsed;
+
+            console.log(`📝 Transacciones a guardar: ${transaccionesAGuardar.length}`);
 
             // Agregar transacciones (marcadas como 'csv' y 'confirmado')
             const transaccionesParaGuardar = transaccionesAGuardar.map(t => ({
@@ -1833,7 +1838,9 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 transaccionRelacionadaId: null
             }));
 
+            console.log('💾 Guardando transacciones en DB...');
             await addTransacciones(transaccionesParaGuardar);
+            console.log('✅ Transacciones guardadas exitosamente');
 
             // Crear presupuestos base si no existen
             const presupuestosExistentes = await getPresupuestos(mesAnioId);
