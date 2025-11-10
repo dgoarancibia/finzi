@@ -110,19 +110,13 @@ window.getOrCreateMesAnio = async function(mesAnio) {
  */
 window.getTransaccionesByMes = async function(mesAnioId) {
     console.log(`🔍 getTransaccionesByMes llamado con mesAnioId:`, mesAnioId);
-    const result = await db.transacciones
-        .where('mesAnioId')
-        .equals(mesAnioId)
-        .toArray();
-    console.log(`🔍 Query retornó ${result.length} transacciones`);
 
-    // Debug: ver todas las transacciones en la DB
+    // WORKAROUND: El índice de Dexie está roto en DBs antiguas
+    // Usar .filter() manual en lugar de .where().equals()
     const todas = await db.transacciones.toArray();
-    console.log(`🔍 Total transacciones en DB: ${todas.length}`);
-    if (todas.length > 0) {
-        console.log(`🔍 Muestra de transacción en DB:`, todas[todas.length - 1]);
-        console.log(`🔍 mesAnioIds únicos en DB:`, [...new Set(todas.map(t => t.mesAnioId))]);
-    }
+    const result = todas.filter(t => t.mesAnioId === mesAnioId);
+
+    console.log(`🔍 Total en DB: ${todas.length}, Filtradas: ${result.length}`);
 
     return result;
 }
@@ -134,9 +128,9 @@ window.getTransaccionesByMes = async function(mesAnioId) {
  * @returns {Promise<Array>} Array de transacciones filtradas
  */
 window.getTransaccionesFiltradas = async function(mesAnioId, filtros = {}) {
-    let query = db.transacciones.where('mesAnioId').equals(mesAnioId);
-
-    const transacciones = await query.toArray();
+    // WORKAROUND: Usar .filter() manual en lugar de índice
+    const todas = await db.transacciones.toArray();
+    const transacciones = todas.filter(t => t.mesAnioId === mesAnioId);
 
     // Aplicar filtros en memoria
     return transacciones.filter(t => {

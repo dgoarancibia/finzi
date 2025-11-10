@@ -42,10 +42,9 @@ window.getTransaccionesByMes = async function(mesAnioId) {
 };
 
 async function getTransaccionesByMesIndexedDB(mesAnioId) {
-    return await db.transacciones
-        .where('mesAnioId')
-        .equals(mesAnioId)
-        .toArray();
+    // WORKAROUND: Usar .filter() manual en lugar de índice
+    const todas = await db.transacciones.toArray();
+    return todas.filter(t => t.mesAnioId === mesAnioId);
 }
 
 async function getTransaccionesByMesFirebase(mesAnioId) {
@@ -161,10 +160,15 @@ window.deleteMesCarga = async function(id) {
 };
 
 async function deleteMesCargaIndexedDB(id) {
-    // Eliminar transacciones asociadas
-    await db.transacciones.where('mesAnioId').equals(id).delete();
-    // Eliminar presupuestos asociados
-    await db.presupuestos.where('mesAnioId').equals(id).delete();
+    // WORKAROUND: Usar .filter() manual para encontrar y eliminar
+    const transacciones = await db.transacciones.toArray();
+    const idsTransacciones = transacciones.filter(t => t.mesAnioId === id).map(t => t.id);
+    await db.transacciones.bulkDelete(idsTransacciones);
+
+    const presupuestos = await db.presupuestos.toArray();
+    const idsPresupuestos = presupuestos.filter(p => p.mesAnioId === id).map(p => p.id);
+    await db.presupuestos.bulkDelete(idsPresupuestos);
+
     // Eliminar el mes
     return await db.mesesCarga.delete(id);
 }
@@ -229,10 +233,9 @@ window.getPresupuestosByMes = async function(mesAnioId) {
 };
 
 async function getPresupuestosByMesIndexedDB(mesAnioId) {
-    return await db.presupuestos
-        .where('mesAnioId')
-        .equals(mesAnioId)
-        .toArray();
+    // WORKAROUND: Usar .filter() manual en lugar de índice
+    const todos = await db.presupuestos.toArray();
+    return todos.filter(p => p.mesAnioId === mesAnioId);
 }
 
 async function getPresupuestosByMesFirebase(mesAnioId) {

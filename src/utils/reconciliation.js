@@ -299,11 +299,9 @@ window.ejecutarReconciliacion = async function(mesAnio) {
         return { error: 'Mes no encontrado' };
     }
 
-    const csvs = await db.transacciones
-        .where('mesAnioId')
-        .equals(mesAnioObj.id)
-        .and(t => t.origen === 'csv')
-        .toArray();
+    // WORKAROUND: Usar .filter() manual en lugar de índice
+    const todas = await db.transacciones.toArray();
+    const csvs = todas.filter(t => t.mesAnioId === mesAnioObj.id && t.origen === 'csv');
 
     // 3. Encontrar matches
     const resultado = window.encontrarMatches(manuales, csvs);
