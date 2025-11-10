@@ -6419,6 +6419,7 @@ const ModalQuickAdd = ({ onClose, onSuccess }) => {
     const [guardando, setGuardando] = useState(false);
     const [sugerenciasComercios, setSugerenciasComercios] = useState([]);
     const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
+    const [esCompartido, setEsCompartido] = useState(false);
 
     // Cargar histórico de comercios para autocompletado
     useEffect(() => {
@@ -6461,8 +6462,8 @@ const ModalQuickAdd = ({ onClose, onSuccess }) => {
                 perfilId,
                 cuotaActual: 1,
                 cuotasTotal: cuotasNum,
-                esCompartido: false,
-                perfilCompartidoId: null,
+                esCompartido,
+                perfilCompartidoId: esCompartido ? perfiles.find(p => p.id !== perfilId)?.id : null,
                 porcentajePerfil: 50
             };
 
@@ -6612,6 +6613,33 @@ const ModalQuickAdd = ({ onClose, onSuccess }) => {
                         />
                     </div>
                 </div>
+
+                {/* Checkbox de gasto compartido 50/50 */}
+                {perfiles.length > 1 && (
+                    <div className="border-t pt-4">
+                        <div className="bg-pink-50 border border-pink-200 rounded-lg p-3">
+                            <div className="flex items-start space-x-3">
+                                <input
+                                    type="checkbox"
+                                    id="esCompartidoQuick"
+                                    checked={esCompartido}
+                                    onChange={(e) => setEsCompartido(e.target.checked)}
+                                    className="w-5 h-5 text-pink-600 border-gray-300 rounded focus:ring-pink-500 mt-0.5 cursor-pointer"
+                                />
+                                <div className="flex-1">
+                                    <label htmlFor="esCompartidoQuick" className="font-medium text-pink-900 cursor-pointer block">
+                                        💑 Gasto compartido 50/50
+                                    </label>
+                                    {esCompartido && monto && (
+                                        <p className="text-sm text-pink-700 mt-1">
+                                            Este gasto se dividirá en partes iguales: ${Math.round(parseInt(monto) / 2).toLocaleString('es-CL')} cada uno
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Botones */}
                 <div className="flex space-x-3 pt-4">
