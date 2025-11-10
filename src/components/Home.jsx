@@ -1616,6 +1616,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
     const [transaccionesParsed, setTransaccionesParsed] = useState([]);
     const [procesando, setProcesando] = useState(false);
     const [error, setError] = useState(null);
+    const [mesAnioIdGuardado, setMesAnioIdGuardado] = useState(null);
 
     // Modo de revisión: 'auto' o 'manual'
     const [modoRevision, setModoRevision] = useState('auto');
@@ -1851,6 +1852,9 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
             const resultado = await window.ejecutarReconciliacion(mesAnio);
 
             setProcesando(false);
+
+            // Guardar mesAnioId para usarlo después
+            setMesAnioIdGuardado(mesAnioId);
 
             // Si hay transacciones para reconciliar, mostrar panel
             if (resultado.totalManuales > 0) {
@@ -2431,12 +2435,12 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                 resultado={resultadoReconciliacion}
                 onConfirmar={(resultado) => {
                     setMostrarReconciliacion(false);
-                    onSuccess();
+                    onSuccess(mesAnioIdGuardado);
                     onClose();
                 }}
                 onCancelar={() => {
                     setMostrarReconciliacion(false);
-                    onSuccess();
+                    onSuccess(mesAnioIdGuardado);
                     onClose();
                 }}
             />
