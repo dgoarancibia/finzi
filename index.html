@@ -2961,9 +2961,9 @@ window.parsearBancoBCI = function(texto, mesAnio) {
     const transacciones = [];
     const lineas = texto.split('\n');
 
-    // Patrón para BCI: puede empezar con LUGAR, luego fecha DD/MM/YY, código, descripción, lugar, montos
+    // Patrón para BCI: fecha DD/MM/YY, dos códigos, descripción completa hasta el primer $
     // Ejemplo: SANTIAGO 17/09/25 2209 14634522 PAYU *UBER EATS SANTIAGO $33.944 $33.944 01/01 $33.944
-    const patron = /(?:[A-Z\s]+\s+)?(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+\d+\s+(.+?)\s+(?:[A-Z\s]+\s+)?\$\s*([\d\.]+)\s*\$\s*[\d\.]+\s+\d{2}\/\d{2}\s+\$/gi;
+    const patron = /(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+\d+\s+(.+?)\s+\$\s*([\d\.]+)/gi;
 
     for (const linea of lineas) {
         // Saltar líneas de encabezado, totales y secciones especiales
@@ -3033,10 +3033,9 @@ window.parsearBancoChile = function(texto, mesAnio) {
     const transacciones = [];
     const lineas = texto.split('\n');
 
-    // Patrón para Edwards: puede empezar con LUGAR (opcional), luego fecha DD/MM/YY, código, descripción, montos
+    // Patrón para Edwards: fecha DD/MM/YY, código, descripción completa hasta el primer $
     // Ejemplo: SANTIAGO 20/08/25 210834426118 PAYU *UBER TRIP SANTIAGO $ 7.102 $ 7.102 01/01 $ 7.102
-    // O también: 31/08/25 010900000000 Pago Pesos TEF $ -3.149.360 $ -3.149.360 01/01 $ -3.149.360
-    const patron = /(?:[A-Z\s]+\s+)?(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+(.+?)\s+\$\s*([\-\d\.]+)\s*\$\s*[\-\d\.]+\s+\d{2}\/\d{2}\s+\$/gi;
+    const patron = /(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+(.+?)\s+\$\s*([\-\d\.]+)/gi;
 
     for (const linea of lineas) {
         // Saltar líneas de encabezado, totales y secciones especiales
