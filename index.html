@@ -2953,36 +2953,55 @@ window.parsearBancoSantander = function(texto, mesAnio) {
 
 /**
  * Parser para Banco BCI
- * Formato típico: DD/MM/YYYY DESCRIPCION MONTO
- * El PDF de BCI suele tener formato tabular
+ * Formato tabular: LUGAR FECHA CODIGO DESCRIPCION LUGAR $ MONTO $ MONTO CUOTA $ MONTO
+ * Ejemplo: SANTIAGO 17/09/25 2209 14634522 PAYU *UBER EATS SANTIAGO $33.944 $33.944 01/01 $33.944
  */
 window.parsearBancoBCI = function(texto, mesAnio) {
     console.log('Usando parser específico de BCI');
     const transacciones = [];
     const lineas = texto.split('\n');
 
-    // Patrón para BCI: fecha + descripción + monto
-    // Ejemplo: "05/10/2024 MERCADONA SANTIAGO 45.990"
-    const patron = /(\d{2}\/\d{2}\/\d{4})\s+([A-ZÁÉÍÓÚÑ\s\.\-\/]+?)\s+([\d\.]+)(?:\s|$)/gi;
+    // Patrón para BCI: puede empezar con LUGAR, luego fecha DD/MM/YY, código, descripción, lugar, montos
+    // Ejemplo: SANTIAGO 17/09/25 2209 14634522 PAYU *UBER EATS SANTIAGO $33.944 $33.944 01/01 $33.944
+    const patron = /(?:[A-Z\s]+\s+)?(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+\d+\s+(.+?)\s+(?:[A-Z\s]+\s+)?\$\s*([\d\.]+)\s*\$\s*[\d\.]+\s+\d{2}\/\d{2}\s+\$/gi;
 
     for (const linea of lineas) {
-        // Saltar líneas de encabezado o totales
-        if (linea.toLowerCase().includes('fecha') ||
-            linea.toLowerCase().includes('total') ||
-            linea.toLowerCase().includes('subtotal') ||
-            linea.toLowerCase().includes('saldo')) {
+        // Saltar líneas de encabezado, totales y secciones especiales
+        const lineaLower = linea.toLowerCase();
+        if (lineaLower.includes('fecha') ||
+            lineaLower.includes('total ') ||
+            lineaLower.includes('subtotal') ||
+            lineaLower.includes('saldo ') ||
+            lineaLower.includes('cupo ') ||
+            lineaLower.includes('período') ||
+            lineaLower.includes('monto facturado') ||
+            lineaLower.includes('monto cancelado') ||
+            lineaLower.includes('tasa int')) {
             continue;
         }
 
         const matches = [...linea.matchAll(patron)];
 
         for (const match of matches) {
-            const fecha = normalizarFecha(match[1], parseInt(mesAnio.split('-')[0]));
-            const descripcion = match[2].trim();
+            let fechaStr = match[1];
+            let descripcion = match[2].trim();
             const monto = normalizarMonto(match[3]);
 
-            // Filtrar líneas que no parecen transacciones
-            if (monto > 0 && descripcion.length > 3 && !descripcion.match(/^\d+$/)) {
+            // Convertir fecha DD/MM/YY a DD/MM/YYYY
+            if (fechaStr.length === 8) { // DD/MM/YY
+                const partes = fechaStr.split('/');
+                const anio = parseInt(partes[2]);
+                const anioCompleto = anio >= 0 && anio <= 50 ? 2000 + anio : 1900 + anio;
+                fechaStr = `${partes[0]}/${partes[1]}/${anioCompleto}`;
+            }
+
+            const fecha = normalizarFecha(fechaStr, parseInt(mesAnio.split('-')[0]));
+
+            // Limpiar descripción: puede tener ubicación al final
+            descripcion = descripcion.replace(/\s+(SANTIAGO|LAS CONDES|LA SERENA|PROVIDENCIA|CHILE|VITACURA|LA REINA)$/i, '');
+
+            // Filtrar transacciones que no son gastos (solo montos positivos)
+            if (monto > 0 && descripcion.length > 3 && !descripcion.match(/^[\d\s]+$/)) {
                 transacciones.push({
                     fecha: fecha,
                     descripcion: descripcion,
@@ -2992,6 +3011,8 @@ window.parsearBancoBCI = function(texto, mesAnio) {
             }
         }
     }
+
+    console.log(`Parser BCI encontró ${transacciones.length} transacciones`);
 
     // Si no encontró nada con el patrón específico, usar genérico como fallback
     if (transacciones.length === 0) {
