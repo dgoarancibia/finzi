@@ -368,10 +368,14 @@ const Home = () => {
 
                             // Cargar transacciones directamente sin esperar a que selectedMonths se actualice
                             console.log('📊 Cargando transacciones del mes...');
-                            const trans = await getTransaccionesByMes(mesAnioId);
-                            console.log(`✅ Transacciones cargadas: ${trans.length}`);
 
-                            const pres = await getPresupuestos(mesAnioId);
+                            // WORKAROUND: db.js no se actualiza en GitHub Pages, usar query directa
+                            const todasTrans = await db.transacciones.toArray();
+                            const trans = todasTrans.filter(t => t.mesAnioId === mesAnioId);
+                            console.log(`✅ Transacciones cargadas: ${trans.length} (de ${todasTrans.length} totales)`);
+
+                            const todosPres = await db.presupuestos.toArray();
+                            const pres = todosPres.filter(p => p.mesAnioId === mesAnioId);
                             console.log(`✅ Presupuestos cargados: ${pres.length}`);
 
                             const ings = await getIngresos(mes.mesAnio);
@@ -639,10 +643,14 @@ const Home = () => {
 
                         // Cargar transacciones directamente sin esperar a que selectedMonths se actualice
                         console.log('📊 Cargando transacciones del mes...');
-                        const trans = await getTransaccionesByMes(mesAnioId);
-                        console.log(`✅ Transacciones cargadas: ${trans.length}`);
 
-                        const pres = await getPresupuestos(mesAnioId);
+                        // WORKAROUND: db.js no se actualiza en GitHub Pages, usar query directa
+                        const todasTrans = await db.transacciones.toArray();
+                        const trans = todasTrans.filter(t => t.mesAnioId === mesAnioId);
+                        console.log(`✅ Transacciones cargadas: ${trans.length} (de ${todasTrans.length} totales)`);
+
+                        const todosPres = await db.presupuestos.toArray();
+                        const pres = todosPres.filter(p => p.mesAnioId === mesAnioId);
                         console.log(`✅ Presupuestos cargados: ${pres.length}`);
 
                         const ings = await getIngresos(mes.mesAnio);
