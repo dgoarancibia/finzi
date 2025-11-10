@@ -354,22 +354,38 @@ const Home = () => {
                     <ModalCargarCSV
                         onClose={() => setShowModalCargarCSV(false)}
                         onSuccess={async (mesAnioId) => {
+                            console.log('🎯 onSuccess llamado con mesAnioId:', mesAnioId);
+
+                            console.log('🔄 Refrescando meses cargados...');
                             await refreshMesesCargados();
+
+                            console.log('📅 Obteniendo mes de DB...');
                             const mes = await db.mesesCarga.get(mesAnioId);
+                            console.log('✅ Mes obtenido:', mes);
+
                             setSelectedMonth(mes);
                             setSelectedMonths([mes]);
 
                             // Cargar transacciones directamente sin esperar a que selectedMonths se actualice
+                            console.log('📊 Cargando transacciones del mes...');
                             const trans = await getTransaccionesByMes(mesAnioId);
-                            const pres = await getPresupuestos(mesAnioId);
-                            const ings = await getIngresos(mes.mesAnio);
+                            console.log(`✅ Transacciones cargadas: ${trans.length}`);
 
+                            const pres = await getPresupuestos(mesAnioId);
+                            console.log(`✅ Presupuestos cargados: ${pres.length}`);
+
+                            const ings = await getIngresos(mes.mesAnio);
+                            console.log(`✅ Ingresos cargados: ${ings.length}`);
+
+                            console.log('💾 Actualizando estado de React...');
                             setTransacciones(trans);
                             setPresupuestos(pres);
                             setIngresos(ings);
 
+                            console.log('✅ Estado actualizado, cerrando modal');
                             setShowModalCargarCSV(false);
                             mostrarToast('CSV cargado exitosamente', 'success');
+                            console.log('🎉 Proceso completado');
                         }}
                     />
                 )}
@@ -609,22 +625,38 @@ const Home = () => {
                 <ModalCargarCSV
                     onClose={() => setShowModalCargarCSV(false)}
                     onSuccess={async (mesAnioId) => {
+                        console.log('🎯 onSuccess llamado con mesAnioId:', mesAnioId);
+
+                        console.log('🔄 Refrescando meses cargados...');
                         await refreshMesesCargados();
+
+                        console.log('📅 Obteniendo mes de DB...');
                         const mes = await db.mesesCarga.get(mesAnioId);
+                        console.log('✅ Mes obtenido:', mes);
+
                         setSelectedMonth(mes);
                         setSelectedMonths([mes]);
 
                         // Cargar transacciones directamente sin esperar a que selectedMonths se actualice
+                        console.log('📊 Cargando transacciones del mes...');
                         const trans = await getTransaccionesByMes(mesAnioId);
-                        const pres = await getPresupuestos(mesAnioId);
-                        const ings = await getIngresos(mes.mesAnio);
+                        console.log(`✅ Transacciones cargadas: ${trans.length}`);
 
+                        const pres = await getPresupuestos(mesAnioId);
+                        console.log(`✅ Presupuestos cargados: ${pres.length}`);
+
+                        const ings = await getIngresos(mes.mesAnio);
+                        console.log(`✅ Ingresos cargados: ${ings.length}`);
+
+                        console.log('💾 Actualizando estado de React...');
                         setTransacciones(trans);
                         setPresupuestos(pres);
                         setIngresos(ings);
 
+                        console.log('✅ Estado actualizado, cerrando modal');
                         setShowModalCargarCSV(false);
                         mostrarToast('CSV cargado exitosamente', 'success');
+                        console.log('🎉 Proceso completado');
                     }}
                 />
             )}
@@ -1864,8 +1896,14 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
             // Crear presupuestos base si no existen
             console.log('📊 Verificando presupuestos...');
-            const presupuestosExistentes = await getPresupuestos(mesAnioId);
-            console.log(`✅ Presupuestos existentes: ${presupuestosExistentes.length}`);
+            let presupuestosExistentes;
+            try {
+                presupuestosExistentes = await getPresupuestos(mesAnioId);
+                console.log(`✅ Presupuestos existentes: ${presupuestosExistentes.length}`);
+            } catch (presError) {
+                console.error('❌ Error al obtener presupuestos:', presError);
+                presupuestosExistentes = [];
+            }
             if (presupuestosExistentes.length === 0) {
                 console.log('📋 Copiando plantilla de presupuestos...');
                 const plantilla = await getPresupuestos(null);
