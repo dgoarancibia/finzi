@@ -3004,45 +3004,61 @@ window.parsearBancoBCI = function(texto, mesAnio) {
 
 /**
  * Parser para Banco de Chile / Edwards
- * Formato típico: DD/MM DESCRIPCION MONTO (sin año en algunas columnas)
- * Edwards es parte de Banco de Chile
+ * Formato tabular: LUGAR FECHA CODIGO DESCRIPCION LUGAR $ MONTO $ MONTO CUOTA $ MONTO
+ * Ejemplo: SANTIAGO 20/08/25 210834426118 PAYU *UBER TRIP SANTIAGO $ 7.102 $ 7.102 01/01 $ 7.102
  */
 window.parsearBancoChile = function(texto, mesAnio) {
     console.log('Usando parser específico de Banco de Chile/Edwards');
     const transacciones = [];
     const lineas = texto.split('\n');
 
-    // Patrones para Banco de Chile/Edwards
-    // Pueden venir con o sin año: "05/10/2024" o "05/10"
-    const patronConAnio = /(\d{2}\/\d{2}\/\d{4})\s+([A-ZÁÉÍÓÚÑ\s\.\-\/]+?)\s+([\d\.]+)(?:\s|$)/gi;
-    const patronSinAnio = /(\d{2}\/\d{2})\s+([A-ZÁÉÍÓÚÑ\s\.\-\/]+?)\s+([\d\.]+)(?:\s|$)/gi;
+    // Patrón para Edwards: puede empezar con LUGAR (opcional), luego fecha DD/MM/YY, código, descripción, montos
+    // Ejemplo: SANTIAGO 20/08/25 210834426118 PAYU *UBER TRIP SANTIAGO $ 7.102 $ 7.102 01/01 $ 7.102
+    // O también: 31/08/25 010900000000 Pago Pesos TEF $ -3.149.360 $ -3.149.360 01/01 $ -3.149.360
+    const patron = /(?:[A-Z\s]+\s+)?(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+(.+?)\s+\$\s*([\-\d\.]+)\s*\$\s*[\-\d\.]+\s+\d{2}\/\d{2}\s+\$/gi;
 
     for (const linea of lineas) {
-        // Saltar líneas de encabezado o totales
-        if (linea.toLowerCase().includes('fecha') ||
-            linea.toLowerCase().includes('total') ||
-            linea.toLowerCase().includes('subtotal') ||
-            linea.toLowerCase().includes('saldo') ||
-            linea.toLowerCase().includes('cargo') ||
-            linea.toLowerCase().includes('abono')) {
+        // Saltar líneas de encabezado, totales y secciones especiales
+        const lineaLower = linea.toLowerCase();
+        if (lineaLower.includes('fecha') ||
+            lineaLower.includes('total ') ||
+            lineaLower.includes('subtotal') ||
+            lineaLower.includes('saldo ') ||
+            lineaLower.includes('cupo ') ||
+            lineaLower.includes('período') ||
+            lineaLower.includes('monto facturado') ||
+            lineaLower.includes('impuesto') ||
+            lineaLower.includes('comision') ||
+            lineaLower.includes('intereses') ||
+            lineaLower.includes('traspaso deuda') ||
+            lineaLower.includes('tasa int')) {
             continue;
         }
 
-        // Intentar con patrón con año primero
-        let matches = [...linea.matchAll(patronConAnio)];
-
-        // Si no encuentra, intentar sin año
-        if (matches.length === 0) {
-            matches = [...linea.matchAll(patronSinAnio)];
-        }
+        const matches = [...linea.matchAll(patron)];
 
         for (const match of matches) {
-            const fecha = normalizarFecha(match[1], parseInt(mesAnio.split('-')[0]));
-            const descripcion = match[2].trim();
+            let fechaStr = match[1];
+            let descripcion = match[2].trim();
             const monto = normalizarMonto(match[3]);
 
-            // Filtrar líneas que no parecen transacciones
-            if (monto > 0 && descripcion.length > 3 && !descripcion.match(/^\d+$/)) {
+            // Convertir fecha DD/MM/YY a DD/MM/YYYY
+            if (fechaStr.length === 8) { // DD/MM/YY
+                const partes = fechaStr.split('/');
+                const anio = parseInt(partes[2]);
+                const anioCompleto = anio >= 0 && anio <= 50 ? 2000 + anio : 1900 + anio;
+                fechaStr = `${partes[0]}/${partes[1]}/${anioCompleto}`;
+            }
+
+            const fecha = normalizarFecha(fechaStr, parseInt(mesAnio.split('-')[0]));
+
+            // Limpiar descripción: puede tener ubicación al final (SANTIAGO, LAS CONDES, etc)
+            // Remover palabras de ubicación comunes al final
+            descripcion = descripcion.replace(/\s+(SANTIAGO|LAS CONDES|PROVIDENCIA|CHILE|VITACURA|LA REINA)$/i, '');
+
+            // Filtrar transacciones que no son gastos (solo queremos montos positivos)
+            // y que tengan una descripción válida
+            if (monto > 0 && descripcion.length > 3 && !descripcion.match(/^[\d\s]+$/)) {
                 transacciones.push({
                     fecha: fecha,
                     descripcion: descripcion,
@@ -3052,6 +3068,8 @@ window.parsearBancoChile = function(texto, mesAnio) {
             }
         }
     }
+
+    console.log(`Parser Edwards encontró ${transacciones.length} transacciones`);
 
     // Si no encontró nada con el patrón específico, usar genérico como fallback
     if (transacciones.length === 0) {
