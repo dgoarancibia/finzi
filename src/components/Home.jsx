@@ -1892,6 +1892,8 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
             console.log('💾 Guardando transacciones en DB...');
             console.log('📋 Muestra de transacción a guardar:', transaccionesParaGuardar[0]);
+            console.log('🔑 mesAnioId de la muestra:', transaccionesParaGuardar[0].mesAnioId);
+            console.log('📊 Todas las propiedades:', Object.keys(transaccionesParaGuardar[0]));
 
             try {
                 const resultado = await addTransacciones(transaccionesParaGuardar);

@@ -109,10 +109,22 @@ window.getOrCreateMesAnio = async function(mesAnio) {
  * @returns {Promise<Array>} Array de transacciones
  */
 window.getTransaccionesByMes = async function(mesAnioId) {
-    return await db.transacciones
+    console.log(`🔍 getTransaccionesByMes llamado con mesAnioId:`, mesAnioId);
+    const result = await db.transacciones
         .where('mesAnioId')
         .equals(mesAnioId)
         .toArray();
+    console.log(`🔍 Query retornó ${result.length} transacciones`);
+
+    // Debug: ver todas las transacciones en la DB
+    const todas = await db.transacciones.toArray();
+    console.log(`🔍 Total transacciones en DB: ${todas.length}`);
+    if (todas.length > 0) {
+        console.log(`🔍 Muestra de transacción en DB:`, todas[todas.length - 1]);
+        console.log(`🔍 mesAnioIds únicos en DB:`, [...new Set(todas.map(t => t.mesAnioId))]);
+    }
+
+    return result;
 }
 
 /**
