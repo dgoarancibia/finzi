@@ -1863,32 +1863,39 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
             console.log('✅ Transacciones guardadas exitosamente');
 
             // Crear presupuestos base si no existen
+            console.log('📊 Verificando presupuestos...');
             const presupuestosExistentes = await getPresupuestos(mesAnioId);
+            console.log(`✅ Presupuestos existentes: ${presupuestosExistentes.length}`);
             if (presupuestosExistentes.length === 0) {
-                // Copiar plantilla base
+                console.log('📋 Copiando plantilla de presupuestos...');
                 const plantilla = await getPresupuestos(null);
                 if (plantilla.length > 0) {
                     await savePresupuestos(plantilla.map(p => ({
                         categoria: p.categoria,
                         monto: p.monto
                     })), mesAnioId);
+                    console.log('✅ Presupuestos creados');
                 }
             }
 
             // RECONCILIACIÓN: Buscar transacciones manuales provisionales de este mes
+            console.log('🔄 Iniciando reconciliación...');
             const resultado = await window.ejecutarReconciliacion(mesAnio);
+            console.log('✅ Reconciliación completada:', resultado);
 
             setProcesando(false);
 
             // Guardar mesAnioId para usarlo después
             setMesAnioIdGuardado(mesAnioId);
+            console.log('💾 mesAnioId guardado:', mesAnioId);
 
             // Si hay transacciones para reconciliar, mostrar panel
             if (resultado.totalManuales > 0) {
+                console.log('🔔 Mostrando panel de reconciliación');
                 setResultadoReconciliacion(resultado);
                 setMostrarReconciliacion(true);
             } else {
-                // Sin reconciliación necesaria, cerrar modal
+                console.log('✅ Sin reconciliación necesaria, llamando onSuccess');
                 onSuccess(mesAnioId);
             }
         } catch (err) {
