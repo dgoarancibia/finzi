@@ -315,16 +315,40 @@ const Home = () => {
                 <EmptyState
                     icon="📊"
                     title="Bienvenido a Analizador de Gastos TC"
-                    description="Carga tu primer archivo CSV para comenzar a analizar tus gastos de tarjeta de crédito."
+                    description="Carga tu estado de cuenta desde PDF o CSV para comenzar a analizar tus gastos."
                     action={
-                        <button
-                            onClick={() => setShowModalCargarCSV(true)}
-                            className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-lg"
-                        >
-                            Cargar CSV
-                        </button>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <button
+                                onClick={() => setShowModalCargarPDF(true)}
+                                className="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors shadow-lg flex items-center justify-center gap-2"
+                            >
+                                <span className="text-xl">📑</span>
+                                Cargar PDF
+                            </button>
+                            <button
+                                onClick={() => setShowModalCargarCSV(true)}
+                                className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors shadow-lg flex items-center justify-center gap-2"
+                            >
+                                <span className="text-xl">📄</span>
+                                Cargar CSV
+                            </button>
+                        </div>
                     }
                 />
+
+                {showModalCargarPDF && (
+                    <ModalCargarPDF
+                        onClose={() => setShowModalCargarPDF(false)}
+                        onSuccess={async (mesAnioId) => {
+                            await refreshMesesCargados();
+                            const mes = await db.mesesCarga.get(mesAnioId);
+                            setSelectedMonth(mes);
+                            setSelectedMonths([mes]);
+                            setShowModalCargarPDF(false);
+                            mostrarToast('PDF cargado exitosamente 📑', 'success');
+                        }}
+                    />
+                )}
 
                 {showModalCargarCSV && (
                     <ModalCargarCSV
