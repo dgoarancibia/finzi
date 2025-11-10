@@ -1719,8 +1719,31 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
     const [mostrarReconciliacion, setMostrarReconciliacion] = useState(false);
     const [resultadoReconciliacion, setResultadoReconciliacion] = useState(null);
 
+    // Estados para validación de mes duplicado
+    const [mesExistente, setMesExistente] = useState(null);
+    const [modoImportacion, setModoImportacion] = useState(null); // 'reemplazar' | 'agregar' | null
+
     const aniosDisponibles = [new Date().getFullYear(), new Date().getFullYear() - 1];
     const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+    const handleSeleccionarMes = async (indexMes) => {
+        setMesSeleccionado(indexMes);
+
+        // Verificar si ya existe un mes cargado
+        const mesAnio = `${anioSeleccionado}-${String(indexMes + 1).padStart(2, '0')}`;
+        const mesExistenteDB = await db.mesesCarga.where('mesAnio').equals(mesAnio).first();
+
+        if (mesExistenteDB) {
+            // El mes ya existe, mostrar opciones
+            setMesExistente(mesExistenteDB);
+            // No avanzar al paso 2 automáticamente
+        } else {
+            // Mes nuevo, continuar normal
+            setMesExistente(null);
+            setModoImportacion(null);
+            setPaso(2);
+        }
+    };
 
     const handleArchivoChange = async (e) => {
         const file = e.target.files[0];
@@ -1892,6 +1915,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
 
     const handleGuardar = async () => {
         console.log('🚀 Iniciando guardado de transacciones...');
+        console.log('🔧 Modo de importación:', modoImportacion);
         setProcesando(true);
         try {
             const mesAnio = `${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2, '0')}`;
@@ -1901,10 +1925,46 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
             const mesAnioId = await getOrCreateMesAnio(mesAnio);
             console.log('✅ Mes creado/obtenido ID:', mesAnioId);
 
+            // Si es REEMPLAZAR, eliminar transacciones existentes del mes
+            if (modoImportacion === 'reemplazar') {
+                console.log('🗑️ Eliminando transacciones existentes...');
+                const todasTransDB = await db.transacciones.toArray();
+                const idsAEliminar = todasTransDB
+                    .filter(t => t.mesAnioId === mesAnioId)
+                    .map(t => t.id);
+                await db.transacciones.bulkDelete(idsAEliminar);
+                console.log(`✅ ${idsAEliminar.length} transacciones eliminadas`);
+            }
+
             // Si es modo manual, solo guardar las revisadas
-            const transaccionesAGuardar = modoRevision === 'manual'
+            let transaccionesAGuardar = modoRevision === 'manual'
                 ? transaccionesRevisadas
                 : transaccionesParsed;
+
+            // Si es AGREGAR, filtrar solo las que no existen
+            if (modoImportacion === 'agregar') {
+                console.log('🔍 Filtrando transacciones duplicadas...');
+                const todasTransDB = await db.transacciones.toArray();
+                const existentes = todasTransDB.filter(t => t.mesAnioId === mesAnioId);
+
+                transaccionesAGuardar = transaccionesAGuardar.filter(nueva => {
+                    // Considerar duplicada si coincide fecha, comercio y monto
+                    const esDuplicada = existentes.some(existente =>
+                        existente.fecha === nueva.fecha &&
+                        existente.comercio.toLowerCase() === nueva.comercio.toLowerCase() &&
+                        Math.abs(existente.monto - nueva.monto) < 10 // tolerancia de $10
+                    );
+                    return !esDuplicada;
+                });
+
+                console.log(`📊 Transacciones filtradas: ${transaccionesParsed.length - transaccionesAGuardar.length} duplicadas, ${transaccionesAGuardar.length} nuevas`);
+
+                if (transaccionesAGuardar.length === 0) {
+                    setError('No hay transacciones nuevas para agregar. Todas ya existen.');
+                    setProcesando(false);
+                    return;
+                }
+            }
 
             console.log(`📝 Transacciones a guardar: ${transaccionesAGuardar.length}`);
 
@@ -2061,10 +2121,7 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                             {meses.map((mes, index) => (
                                 <button
                                     key={index}
-                                    onClick={() => {
-                                        setMesSeleccionado(index);
-                                        setPaso(2);
-                                    }}
+                                    onClick={() => handleSeleccionarMes(index)}
                                     className={`py-1.5 sm:py-4 px-0.5 rounded-md sm:rounded-lg font-semibold text-[11px] sm:text-base transition-colors ${
                                         mesSeleccionado === index
                                             ? 'bg-indigo-600 text-white'
@@ -2075,6 +2132,47 @@ const ModalCargarCSV = ({ onClose, onSuccess }) => {
                                 </button>
                             ))}
                         </div>
+
+                        {/* Mensaje cuando el mes ya existe */}
+                        {mesExistente && (
+                            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <h4 className="font-semibold text-yellow-900 mb-2">
+                                    ⚠️ Este mes ya está cargado
+                                </h4>
+                                <p className="text-sm text-yellow-800 mb-3">
+                                    Ya tienes transacciones de {meses[mesSeleccionado]} {anioSeleccionado}. ¿Qué deseas hacer?
+                                </p>
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={() => {
+                                            setModoImportacion('reemplazar');
+                                            setPaso(2);
+                                        }}
+                                        className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold text-sm"
+                                    >
+                                        🔄 Reemplazar todo (eliminar existentes y cargar nuevos)
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setModoImportacion('agregar');
+                                            setPaso(2);
+                                        }}
+                                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm"
+                                    >
+                                        ➕ Agregar solo transacciones nuevas
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setMesExistente(null);
+                                            setMesSeleccionado(null);
+                                        }}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold text-sm"
+                                    >
+                                        ❌ Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
