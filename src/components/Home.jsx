@@ -358,6 +358,7 @@ const Home = () => {
                             const mes = await db.mesesCarga.get(mesAnioId);
                             setSelectedMonth(mes);
                             setSelectedMonths([mes]);
+                            await cargarDatosDeMeses();
                             setShowModalCargarCSV(false);
                             mostrarToast('CSV cargado exitosamente', 'success');
                         }}
@@ -603,6 +604,7 @@ const Home = () => {
                         const mes = await db.mesesCarga.get(mesAnioId);
                         setSelectedMonth(mes);
                         setSelectedMonths([mes]);
+                        await cargarDatosDeMeses();
                         setShowModalCargarCSV(false);
                         mostrarToast('CSV cargado exitosamente', 'success');
                     }}
