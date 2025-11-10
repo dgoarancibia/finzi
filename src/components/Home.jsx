@@ -29,24 +29,31 @@ const Home = () => {
     const cargarDatosDeMeses = async () => {
         if (selectedMonths.length === 0) return;
 
+        console.log('🔄 cargarDatosDeMeses ejecutándose...', selectedMonths.map(m => m.id));
         setLoading(true);
         try {
-            // Cargar transacciones de todos los meses seleccionados
+            // WORKAROUND: db.js no se actualiza, usar filtrado manual
+            const todasLasTransDB = await db.transacciones.toArray();
+            const todasLosPresDB = await db.presupuestos.toArray();
+
             const todasTransacciones = [];
             const todosPresupuestos = [];
             const todosIngresos = [];
 
             for (const mes of selectedMonths) {
-                const trans = await getTransaccionesByMes(mes.id);
+                // Filtrar manualmente en lugar de usar índice roto
+                const trans = todasLasTransDB.filter(t => t.mesAnioId === mes.id);
                 todasTransacciones.push(...trans);
+                console.log(`📊 Mes ${mes.mesAnio}: ${trans.length} transacciones`);
 
-                const pres = await getPresupuestos(mes.id);
+                const pres = todasLosPresDB.filter(p => p.mesAnioId === mes.id);
                 todosPresupuestos.push(...pres);
 
                 const ings = await getIngresos(mes.mesAnio);
                 todosIngresos.push(...ings);
             }
 
+            console.log(`✅ Total cargado: ${todasTransacciones.length} transacciones`);
             setTransacciones(todasTransacciones);
             setPresupuestos(todosPresupuestos);
             setIngresos(todosIngresos);
