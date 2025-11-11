@@ -48,8 +48,8 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
             setProcesando(false);
             setPaso(3); // Ir a preview
 
-            // Parsear automáticamente
-            await parsearPDF();
+            // Parsear automáticamente - PASAR EL FILE DIRECTAMENTE
+            await parsearPDF(file);
 
         } catch (err) {
             setError(err.message || 'Error al procesar el archivo');
@@ -57,17 +57,32 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
         }
     };
 
-    const parsearPDF = async () => {
-        if (!archivo || mesSeleccionado === null) return;
+    const parsearPDF = async (fileParam = null) => {
+        // Usar el parámetro si se proporciona, sino el estado
+        const archivoAParsear = fileParam || archivo;
+
+        console.log('🚀 [ModalPDF] parsearPDF iniciado');
+        console.log('📁 Archivo:', archivoAParsear?.name, archivoAParsear?.size, 'bytes');
+        console.log('📅 Mes seleccionado:', mesSeleccionado);
+        console.log('🏦 Banco seleccionado:', bancoSeleccionado);
+
+        if (!archivoAParsear || mesSeleccionado === null) {
+            console.warn('⚠️ [ModalPDF] No hay archivo o mes seleccionado');
+            return;
+        }
 
         setProcesando(true);
         setError(null);
 
         try {
             const mesAnio = `${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2, '0')}`;
+            console.log('🗓️ [ModalPDF] Mes/Año:', mesAnio);
+            console.log('🔧 [ModalPDF] Llamando a window.parsearPDF...');
 
-            // Parsear PDF con el banco seleccionado
-            const resultado = await window.parsearPDF(archivo, bancoSeleccionado === 'generico' ? null : bancoSeleccionado, mesAnio);
+            // Parsear PDF con el banco seleccionado - USAR archivoAParsear
+            const resultado = await window.parsearPDF(archivoAParsear, bancoSeleccionado === 'generico' ? null : bancoSeleccionado, mesAnio);
+
+            console.log('✅ [ModalPDF] parsearPDF completado. Transacciones:', resultado.transacciones?.length);
 
             // Categorizar automáticamente las transacciones
             const transaccionesCategorizadas = resultado.transacciones.map(t => {

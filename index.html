@@ -2832,17 +2832,25 @@ window.ejecutarReconciliacion = async function(mesAnio) {
  * @returns {Promise<string>} - Texto completo del PDF
  */
 window.extractTextFromPDF = async function(file) {
+    console.log('📖 [extractTextFromPDF] Iniciando extracción...');
+    console.log('📁 Archivo:', file.name, file.type, file.size, 'bytes');
+
     try {
         // Convertir archivo a ArrayBuffer
+        console.log('🔄 [extractTextFromPDF] Convirtiendo a ArrayBuffer...');
         const arrayBuffer = await file.arrayBuffer();
+        console.log('✅ ArrayBuffer creado:', arrayBuffer.byteLength, 'bytes');
 
         // Cargar el PDF con PDF.js
+        console.log('📚 [extractTextFromPDF] Cargando PDF con PDF.js...');
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        console.log('✅ PDF cargado. Páginas:', pdf.numPages);
 
         let fullText = '';
 
         // Iterar por todas las páginas
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            console.log(`📄 [extractTextFromPDF] Procesando página ${pageNum}/${pdf.numPages}...`);
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
 
@@ -2852,11 +2860,14 @@ window.extractTextFromPDF = async function(file) {
                 .join(' ');
 
             fullText += pageText + '\n';
+            console.log(`✅ Página ${pageNum}: ${pageText.length} caracteres`);
         }
 
+        console.log('✅ [extractTextFromPDF] Extracción completa. Total:', fullText.length, 'caracteres');
         return fullText;
     } catch (error) {
-        console.error('Error al extraer texto del PDF:', error);
+        console.error('❌ [extractTextFromPDF] Error:', error);
+        console.error('Stack:', error.stack);
         throw new Error('No se pudo leer el PDF. Asegúrate de que sea un PDF válido con texto seleccionable.');
     }
 };
@@ -3276,9 +3287,18 @@ window.parsearBancoRipley = function(texto, mesAnio) {
  * @returns {Promise<Object>} - { transacciones, bancoDetectado }
  */
 window.parsearPDF = async function(file, bancoId, mesAnio) {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🚀 [parsearPDF] INICIO DEL PROCESO');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📁 Archivo:', file.name, '-', file.size, 'bytes');
+    console.log('🏦 Banco ID:', bancoId || 'Auto-detectar');
+    console.log('📅 Mes/Año:', mesAnio);
+
     try {
         // 1. Extraer texto del PDF
+        console.log('📄 [parsearPDF] Extrayendo texto del PDF...');
         const texto = await window.extractTextFromPDF(file);
+        console.log('✅ [parsearPDF] Texto extraído:', texto.length, 'caracteres');
 
         if (!texto || texto.trim().length < 100) {
             throw new Error('El PDF parece estar vacío o no tiene texto extraíble. Intenta con un PDF diferente o usa el CSV.');
@@ -5170,7 +5190,7 @@ const Sidebar = () => {
                     {isSidebarOpen ? (
                         <div className="text-center text-xs text-gray-500 dark:text-gray-400">
                             <p className="font-medium">© 2025 Finzi</p>
-                            <p className="mt-1">v3.3.0 - 11 Nov 2025</p>
+                            <p className="mt-1">v3.3.1 - 11 Nov 2025</p>
                         </div>
                     ) : (
                         <div className="text-center text-xs text-gray-400 dark:text-gray-500">
@@ -13142,8 +13162,8 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
             setProcesando(false);
             setPaso(3); // Ir a preview
 
-            // Parsear automáticamente
-            await parsearPDF();
+            // Parsear automáticamente - PASAR EL FILE DIRECTAMENTE
+            await parsearPDF(file);
 
         } catch (err) {
             setError(err.message || 'Error al procesar el archivo');
@@ -13151,17 +13171,32 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
         }
     };
 
-    const parsearPDF = async () => {
-        if (!archivo || mesSeleccionado === null) return;
+    const parsearPDF = async (fileParam = null) => {
+        // Usar el parámetro si se proporciona, sino el estado
+        const archivoAParsear = fileParam || archivo;
+
+        console.log('🚀 [ModalPDF] parsearPDF iniciado');
+        console.log('📁 Archivo:', archivoAParsear?.name, archivoAParsear?.size, 'bytes');
+        console.log('📅 Mes seleccionado:', mesSeleccionado);
+        console.log('🏦 Banco seleccionado:', bancoSeleccionado);
+
+        if (!archivoAParsear || mesSeleccionado === null) {
+            console.warn('⚠️ [ModalPDF] No hay archivo o mes seleccionado');
+            return;
+        }
 
         setProcesando(true);
         setError(null);
 
         try {
             const mesAnio = `${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2, '0')}`;
+            console.log('🗓️ [ModalPDF] Mes/Año:', mesAnio);
+            console.log('🔧 [ModalPDF] Llamando a window.parsearPDF...');
 
-            // Parsear PDF con el banco seleccionado
-            const resultado = await window.parsearPDF(archivo, bancoSeleccionado === 'generico' ? null : bancoSeleccionado, mesAnio);
+            // Parsear PDF con el banco seleccionado - USAR archivoAParsear
+            const resultado = await window.parsearPDF(archivoAParsear, bancoSeleccionado === 'generico' ? null : bancoSeleccionado, mesAnio);
+
+            console.log('✅ [ModalPDF] parsearPDF completado. Transacciones:', resultado.transacciones?.length);
 
             // Categorizar automáticamente las transacciones
             const transaccionesCategorizadas = resultado.transacciones.map(t => {

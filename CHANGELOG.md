@@ -7,6 +7,24 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [3.3.1] - 2025-11-11
+
+### 🐛 Corregido (CRÍTICO)
+- **Bug de setState asíncrono en modal PDF**: Corregido el problema donde el archivo PDF era `undefined` al intentar parsearlo. El error ocurría porque `setArchivo(file)` es asíncrono en React, y `parsearPDF()` se ejecutaba antes de que el estado se actualizara.
+  - **Solución**: Ahora `parsearPDF()` recibe el archivo como parámetro directo en lugar de depender del estado.
+  - **Síntoma**: PDF mostraba "0 transacciones" sin logs en consola.
+  - **Causa**: `archivo` era `undefined` cuando se ejecutaba el parser.
+
+### 🔧 Mejorado
+- **Logging ultra-detallado**: Agregados logs en cada paso del proceso de carga de PDF:
+  - `[ModalPDF]` - Estado del modal y archivo seleccionado
+  - `[extractTextFromPDF]` - Extracción página por página
+  - `[parsearPDF]` - Proceso completo con bandera separadora
+  - Muestra nombre del archivo, tamaño, número de páginas, caracteres extraídos
+- Mejor diagnóstico de problemas con logs visuales (🚀 📁 📖 📄 ✅ ❌)
+
+---
+
 ## [3.3.0] - 2025-11-11
 
 ### ✨ Añadido

@@ -7,17 +7,25 @@
  * @returns {Promise<string>} - Texto completo del PDF
  */
 window.extractTextFromPDF = async function(file) {
+    console.log('📖 [extractTextFromPDF] Iniciando extracción...');
+    console.log('📁 Archivo:', file.name, file.type, file.size, 'bytes');
+
     try {
         // Convertir archivo a ArrayBuffer
+        console.log('🔄 [extractTextFromPDF] Convirtiendo a ArrayBuffer...');
         const arrayBuffer = await file.arrayBuffer();
+        console.log('✅ ArrayBuffer creado:', arrayBuffer.byteLength, 'bytes');
 
         // Cargar el PDF con PDF.js
+        console.log('📚 [extractTextFromPDF] Cargando PDF con PDF.js...');
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        console.log('✅ PDF cargado. Páginas:', pdf.numPages);
 
         let fullText = '';
 
         // Iterar por todas las páginas
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            console.log(`📄 [extractTextFromPDF] Procesando página ${pageNum}/${pdf.numPages}...`);
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
 
@@ -27,11 +35,14 @@ window.extractTextFromPDF = async function(file) {
                 .join(' ');
 
             fullText += pageText + '\n';
+            console.log(`✅ Página ${pageNum}: ${pageText.length} caracteres`);
         }
 
+        console.log('✅ [extractTextFromPDF] Extracción completa. Total:', fullText.length, 'caracteres');
         return fullText;
     } catch (error) {
-        console.error('Error al extraer texto del PDF:', error);
+        console.error('❌ [extractTextFromPDF] Error:', error);
+        console.error('Stack:', error.stack);
         throw new Error('No se pudo leer el PDF. Asegúrate de que sea un PDF válido con texto seleccionable.');
     }
 };
@@ -451,9 +462,18 @@ window.parsearBancoRipley = function(texto, mesAnio) {
  * @returns {Promise<Object>} - { transacciones, bancoDetectado }
  */
 window.parsearPDF = async function(file, bancoId, mesAnio) {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🚀 [parsearPDF] INICIO DEL PROCESO');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📁 Archivo:', file.name, '-', file.size, 'bytes');
+    console.log('🏦 Banco ID:', bancoId || 'Auto-detectar');
+    console.log('📅 Mes/Año:', mesAnio);
+
     try {
         // 1. Extraer texto del PDF
+        console.log('📄 [parsearPDF] Extrayendo texto del PDF...');
         const texto = await window.extractTextFromPDF(file);
+        console.log('✅ [parsearPDF] Texto extraído:', texto.length, 'caracteres');
 
         if (!texto || texto.trim().length < 100) {
             throw new Error('El PDF parece estar vacío o no tiene texto extraíble. Intenta con un PDF diferente o usa el CSV.');

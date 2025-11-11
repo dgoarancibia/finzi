@@ -352,7 +352,7 @@ const Sidebar = () => {
                     {isSidebarOpen ? (
                         <div className="text-center text-xs text-gray-500 dark:text-gray-400">
                             <p className="font-medium">© 2025 Finzi</p>
-                            <p className="mt-1">v3.3.0 - 11 Nov 2025</p>
+                            <p className="mt-1">v3.3.1 - 11 Nov 2025</p>
                         </div>
                     ) : (
                         <div className="text-center text-xs text-gray-400 dark:text-gray-500">
