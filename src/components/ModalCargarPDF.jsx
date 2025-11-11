@@ -86,7 +86,7 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
 
             // Categorizar automáticamente las transacciones
             const transaccionesCategorizadas = resultado.transacciones.map(t => {
-                const categoriaSugerida = categorizarAutomatico(t.descripcion);
+                const categoriaSugerida = window.categorizarTransaccion(t.descripcion, t.comercio);
 
                 return {
                     ...t,

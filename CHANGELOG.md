@@ -7,6 +7,15 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [3.3.2] - 2025-11-11
+
+### 🐛 Corregido
+- **Error de función no definida**: Corregido `categorizarAutomatico is not defined`. La función correcta es `window.categorizarTransaccion(descripcion, comercio)`.
+  - **Síntoma**: PDF se parseaba correctamente (18 transacciones) pero fallaba al categorizar.
+  - **Causa**: Nombre de función incorrecto.
+
+---
+
 ## [3.3.1] - 2025-11-11
 
 ### 🐛 Corregido (CRÍTICO)

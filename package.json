@@ -1,6 +1,6 @@
 {
   "name": "analizador-gastos-tc",
-  "version": "3.3.1",
+  "version": "3.3.2",
   "description": "Analizador de Gastos de Tarjeta de Crédito - Single Page Application",
   "main": "index.html",
   "scripts": {
