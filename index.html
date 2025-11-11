@@ -1271,7 +1271,15 @@ window.procesarResultadosCSV = function(data) {
         }
 
         // Parsear monto
-        const monto = parsearMonto(row.monto);
+        let monto = parsearMonto(row.monto);
+
+        // Detectar devoluciones/reembolsos y convertir a monto negativo
+        const esDevolucion = detectarDevolucion(row.descripcion);
+        if (esDevolucion) {
+            monto = -Math.abs(monto);
+            console.log(`💳 Devolución detectada: "${row.descripcion}" → monto: ${monto}`);
+        }
+
         totalMontosOriginales += Math.abs(monto);
 
         if (monto === 0 || isNaN(monto)) {
@@ -1327,6 +1335,39 @@ window.procesarResultadosCSV = function(data) {
 
     return transacciones;
 }
+
+/**
+ * Detecta si una transacción es una devolución/reembolso
+ * @param {string} descripcion - Descripción de la transacción
+ * @returns {boolean} True si es una devolución
+ */
+window.detectarDevolucion = function(descripcion) {
+    if (!descripcion) return false;
+
+    const textoLower = descripcion.toLowerCase();
+
+    // Palabras clave que indican devolución/reembolso
+    const palabrasClave = [
+        'devol',
+        'devolución',
+        'devolucion',
+        'reembolso',
+        'reverso',
+        'anulacion',
+        'anulación',
+        'abono',
+        'credito',
+        'crédito',
+        'nota de credito',
+        'nota credito',
+        'nc',
+        'refund',
+        'reversal',
+        'chargeback'
+    ];
+
+    return palabrasClave.some(palabra => textoLower.includes(palabra));
+};
 
 /**
  * Detecta información de cuotas en la descripción o campo cuotas
