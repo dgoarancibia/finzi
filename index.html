@@ -2867,13 +2867,17 @@ window.extractTextFromPDF = async function(file) {
  * @returns {string|null} - ID del banco detectado o null
  */
 window.detectarBanco = function(texto) {
+    console.log('🏦 Detectando banco automáticamente...');
+    console.log(`📄 Primeros 500 caracteres del PDF:`);
+    console.log(texto.substring(0, 500));
+
     const textoLower = texto.toLowerCase();
 
     // Patrones de detección por banco
     const patrones = {
         'santander': ['banco santander', 'santander chile', 'www.santander.cl'],
         'bci': ['banco bci', 'bci.cl', 'banco de crédito'],
-        'chile': ['banco de chile', 'bancochile.cl', 'banco chile', 'edwards', 'banco edwards'],
+        'chile': ['banco de chile', 'bancochile.cl', 'banco chile', 'edwards', 'banco edwards', 'bancoedwards'],
         'estado': ['bancoestado', 'banco estado', 'estado.cl'],
         'scotiabank': ['scotiabank', 'scotia', 'scotiabank.cl'],
         'itau': ['itaú', 'itau', 'banco itaú'],
@@ -2885,11 +2889,13 @@ window.detectarBanco = function(texto) {
     for (const [banco, keywords] of Object.entries(patrones)) {
         for (const keyword of keywords) {
             if (textoLower.includes(keyword)) {
+                console.log(`✅ Banco detectado: ${banco} (palabra clave: "${keyword}")`);
                 return banco;
             }
         }
     }
 
+    console.log('⚠️ No se pudo detectar el banco automáticamente');
     return null;
 };
 
@@ -2955,17 +2961,37 @@ function normalizarFecha(fechaStr, anio = new Date().getFullYear()) {
  * Formato esperado: FECHA DESCRIPCION MONTO
  */
 window.parsearBancoGenerico = function(texto, mesAnio) {
+    console.log('🔍 Parser Genérico - Iniciando...');
+    console.log(`📄 Longitud del texto: ${texto.length} caracteres`);
+    console.log(`📅 Mes/Año objetivo: ${mesAnio}`);
+
     const transacciones = [];
 
     // Separar por líneas
     const lineas = texto.split('\n');
+    console.log(`📊 Total líneas a procesar: ${lineas.length}`);
 
     // Patrón genérico: buscar líneas con fecha y monto
     // Ejemplo: "05/11/2024 MERCADONA CHILE $45.000"
     const patron = /(\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{4})?)\s+(.+?)\s+([\$\d\.,]+)/g;
 
+    let lineasProcesadas = 0;
+    let matchesEncontrados = 0;
+
     for (const linea of lineas) {
+        lineasProcesadas++;
+
+        // Mostrar primeras 5 líneas para debug
+        if (lineasProcesadas <= 5) {
+            console.log(`📝 Línea ${lineasProcesadas}: ${linea.substring(0, 100)}...`);
+        }
+
         const matches = [...linea.matchAll(patron)];
+        matchesEncontrados += matches.length;
+
+        if (matches.length > 0 && lineasProcesadas <= 5) {
+            console.log(`✅ Match genérico encontrado en línea ${lineasProcesadas}`);
+        }
 
         for (const match of matches) {
             const fecha = normalizarFecha(match[1], parseInt(mesAnio.split('-')[0]));
@@ -2982,6 +3008,11 @@ window.parsearBancoGenerico = function(texto, mesAnio) {
             }
         }
     }
+
+    console.log(`📊 Resumen parser genérico:`);
+    console.log(`   - Líneas procesadas: ${lineasProcesadas}`);
+    console.log(`   - Matches del patrón: ${matchesEncontrados}`);
+    console.log(`   - Transacciones válidas: ${transacciones.length}`);
 
     return transacciones;
 };
@@ -3002,15 +3033,30 @@ window.parsearBancoSantander = function(texto, mesAnio) {
  * Ejemplo: SANTIAGO 17/09/25 2209 14634522 PAYU *UBER EATS SANTIAGO $33.944 $33.944 01/01 $33.944
  */
 window.parsearBancoBCI = function(texto, mesAnio) {
-    console.log('Usando parser específico de BCI');
+    console.log('🔍 Parser BCI - Iniciando...');
+    console.log(`📄 Longitud del texto: ${texto.length} caracteres`);
+    console.log(`📅 Mes/Año objetivo: ${mesAnio}`);
+
     const transacciones = [];
     const lineas = texto.split('\n');
+    console.log(`📊 Total líneas a procesar: ${lineas.length}`);
 
     // Patrón para BCI: fecha DD/MM/YY, dos códigos, descripción completa hasta el primer $
     // Ejemplo: SANTIAGO 17/09/25 2209 14634522 PAYU *UBER EATS SANTIAGO $33.944 $33.944 01/01 $33.944
     const patron = /(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+\d+\s+(.+?)\s+\$\s*([\d\.]+)/gi;
 
+    let lineasProcesadas = 0;
+    let lineasDescartadas = 0;
+    let matchesEncontrados = 0;
+
     for (const linea of lineas) {
+        lineasProcesadas++;
+
+        // Mostrar primeras 5 líneas para debug
+        if (lineasProcesadas <= 5) {
+            console.log(`📝 Línea ${lineasProcesadas}: ${linea.substring(0, 100)}...`);
+        }
+
         // Saltar líneas de encabezado, totales y secciones especiales
         const lineaLower = linea.toLowerCase();
         if (lineaLower.includes('fecha') ||
@@ -3022,10 +3068,16 @@ window.parsearBancoBCI = function(texto, mesAnio) {
             lineaLower.includes('monto facturado') ||
             lineaLower.includes('monto cancelado') ||
             lineaLower.includes('tasa int')) {
+            lineasDescartadas++;
             continue;
         }
 
         const matches = [...linea.matchAll(patron)];
+        matchesEncontrados += matches.length;
+
+        if (matches.length > 0 && lineasProcesadas <= 5) {
+            console.log(`✅ Match encontrado en línea ${lineasProcesadas}`);
+        }
 
         for (const match of matches) {
             let fechaStr = match[1];
@@ -3057,11 +3109,15 @@ window.parsearBancoBCI = function(texto, mesAnio) {
         }
     }
 
-    console.log(`Parser BCI encontró ${transacciones.length} transacciones`);
+    console.log(`📊 Resumen parser BCI:`);
+    console.log(`   - Líneas procesadas: ${lineasProcesadas}`);
+    console.log(`   - Líneas descartadas: ${lineasDescartadas}`);
+    console.log(`   - Matches del patrón: ${matchesEncontrados}`);
+    console.log(`   - Transacciones válidas: ${transacciones.length}`);
 
     // Si no encontró nada con el patrón específico, usar genérico como fallback
     if (transacciones.length === 0) {
-        console.log('Parser específico de BCI no encontró transacciones, usando genérico');
+        console.log('⚠️ Parser específico de BCI no encontró transacciones, usando genérico');
         return window.parsearBancoGenerico(texto, mesAnio);
     }
 
@@ -3070,19 +3126,32 @@ window.parsearBancoBCI = function(texto, mesAnio) {
 
 /**
  * Parser para Banco de Chile / Edwards
- * Formato tabular: LUGAR FECHA CODIGO DESCRIPCION LUGAR $ MONTO $ MONTO CUOTA $ MONTO
- * Ejemplo: SANTIAGO 20/08/25 210834426118 PAYU *UBER TRIP SANTIAGO $ 7.102 $ 7.102 01/01 $ 7.102
+ * Formato estado de cuenta: LUGAR DD/MM/YY CODIGO DESCRIPCION LUGAR $ MONTO...
+ * Ejemplo: SANTIAGO 21/09/25 220910338388 COPEC APP SANTIAGO $ 50.308 $ 50.308 01/01 $ 50.308
  */
 window.parsearBancoChile = function(texto, mesAnio) {
-    console.log('Usando parser específico de Banco de Chile/Edwards');
+    console.log('🔍 Parser Banco Chile/Edwards - Iniciando...');
+    console.log(`📄 Longitud del texto: ${texto.length} caracteres`);
+
     const transacciones = [];
     const lineas = texto.split('\n');
+    console.log(`📊 Total líneas a procesar: ${lineas.length}`);
 
-    // Patrón para Edwards: fecha DD/MM/YY, código, descripción completa hasta el primer $
-    // Ejemplo: SANTIAGO 20/08/25 210834426118 PAYU *UBER TRIP SANTIAGO $ 7.102 $ 7.102 01/01 $ 7.102
-    const patron = /(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+(.+?)\s+\$\s*([\-\d\.]+)/gi;
+    // Patrón mejorado para Edwards estado de cuenta
+    // Captura: LUGAR (opcional) FECHA CODIGO DESCRIPCION ... $ MONTO
+    const patron = /(?:^|\s)(\d{2}\/\d{2}\/\d{2})\s+(\d+)\s+(.+?)\s+\$\s*([\d\.,]+)/g;
+
+    let lineasProcesadas = 0;
+    let matchesEncontrados = 0;
 
     for (const linea of lineas) {
+        lineasProcesadas++;
+
+        // Mostrar primeras 10 líneas para debug
+        if (lineasProcesadas <= 10) {
+            console.log(`📝 Línea ${lineasProcesadas}: ${linea.substring(0, 120)}...`);
+        }
+
         // Saltar líneas de encabezado, totales y secciones especiales
         const lineaLower = linea.toLowerCase();
         if (lineaLower.includes('fecha') ||
@@ -3092,20 +3161,32 @@ window.parsearBancoChile = function(texto, mesAnio) {
             lineaLower.includes('cupo ') ||
             lineaLower.includes('período') ||
             lineaLower.includes('monto facturado') ||
-            lineaLower.includes('impuesto') ||
-            lineaLower.includes('comision') ||
-            lineaLower.includes('intereses') ||
+            lineaLower.includes('operación') ||
+            lineaLower.includes('pagar hasta') ||
+            lineaLower.includes('impuesto decreto') ||
+            lineaLower.includes('comision mensual') ||
+            lineaLower.includes('intereses rotativo') ||
+            lineaLower.includes('intereses de mora') ||
             lineaLower.includes('traspaso deuda') ||
+            lineaLower.includes('devol. pago') ||
+            lineaLower.includes('pago pesos') ||
+            lineaLower.includes('pago pap') ||
             lineaLower.includes('tasa int')) {
             continue;
         }
 
         const matches = [...linea.matchAll(patron)];
+        matchesEncontrados += matches.length;
+
+        if (matches.length > 0 && lineasProcesadas <= 10) {
+            console.log(`✅ Match encontrado en línea ${lineasProcesadas}: ${matches.length} coincidencias`);
+        }
 
         for (const match of matches) {
             let fechaStr = match[1];
-            let descripcion = match[2].trim();
-            const monto = normalizarMonto(match[3]);
+            const codigo = match[2];
+            let descripcion = match[3].trim();
+            const monto = normalizarMonto(match[4]);
 
             // Convertir fecha DD/MM/YY a DD/MM/YYYY
             if (fechaStr.length === 8) { // DD/MM/YY
@@ -3117,28 +3198,37 @@ window.parsearBancoChile = function(texto, mesAnio) {
 
             const fecha = normalizarFecha(fechaStr, parseInt(mesAnio.split('-')[0]));
 
-            // Limpiar descripción: puede tener ubicación al final (SANTIAGO, LAS CONDES, etc)
-            // Remover palabras de ubicación comunes al final
-            descripcion = descripcion.replace(/\s+(SANTIAGO|LAS CONDES|PROVIDENCIA|CHILE|VITACURA|LA REINA)$/i, '');
+            // Limpiar descripción: remover ubicación repetida al final
+            descripcion = descripcion.replace(/\s+(SANTIAGO|LAS CONDES|LA SERENA|PROVIDENCIA|VITACURA|LA REINA|QUINTERO|UOA)\s*$/i, '');
 
-            // Filtrar transacciones que no son gastos (solo queremos montos positivos)
-            // y que tengan una descripción válida
-            if (monto > 0 && descripcion.length > 3 && !descripcion.match(/^[\d\s]+$/)) {
+            // Remover montos duplicados y cuotas que aparezcan en la descripción
+            descripcion = descripcion.replace(/\s+\$\s*[\d\.,]+.*$/g, '');
+
+            // Filtrar: solo montos positivos mayores a 100 (para evitar impuestos pequeños)
+            // y descripciones válidas (no solo números)
+            if (monto > 100 && descripcion.length > 3 && !descripcion.match(/^[\d\s]+$/)) {
                 transacciones.push({
                     fecha: fecha,
-                    descripcion: descripcion,
-                    comercio: descripcion.substring(0, 50),
+                    descripcion: descripcion.trim(),
+                    comercio: descripcion.substring(0, 50).trim(),
                     monto: monto
                 });
+
+                if (transacciones.length <= 5) {
+                    console.log(`💳 Transacción ${transacciones.length}: ${fecha} - ${descripcion} - ${monto}`);
+                }
             }
         }
     }
 
-    console.log(`Parser Edwards encontró ${transacciones.length} transacciones`);
+    console.log(`📊 Resumen parser Edwards:`);
+    console.log(`   - Líneas procesadas: ${lineasProcesadas}`);
+    console.log(`   - Matches del patrón: ${matchesEncontrados}`);
+    console.log(`   - Transacciones válidas: ${transacciones.length}`);
 
     // Si no encontró nada con el patrón específico, usar genérico como fallback
     if (transacciones.length === 0) {
-        console.log('Parser específico de Banco Chile/Edwards no encontró transacciones, usando genérico');
+        console.log('⚠️ Parser específico de Edwards no encontró transacciones, usando genérico');
         return window.parsearBancoGenerico(texto, mesAnio);
     }
 
@@ -5079,8 +5169,8 @@ const Sidebar = () => {
                     )}
                     {isSidebarOpen ? (
                         <div className="text-center text-xs text-gray-500 dark:text-gray-400">
-                            <p className="font-medium">© 2025 Gastos TC</p>
-                            <p className="mt-1">v3.2 Minimalista</p>
+                            <p className="font-medium">© 2025 Finzi</p>
+                            <p className="mt-1">v3.3.0 - 11 Nov 2025</p>
                         </div>
                     ) : (
                         <div className="text-center text-xs text-gray-400 dark:text-gray-500">
