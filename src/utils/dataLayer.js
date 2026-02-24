@@ -32,6 +32,38 @@ async function addTransaccionFirebase(transaccion) {
     return docRef.id;
 }
 
+// Agregar múltiples transacciones (bulk)
+window.addTransacciones = async function(transacciones) {
+    if (window.USE_FIREBASE && window.isAuthenticated()) {
+        return await addTransaccionesFirebase(transacciones);
+    } else {
+        return await addTransaccionesIndexedDB(transacciones);
+    }
+};
+
+async function addTransaccionesIndexedDB(transacciones) {
+    return await db.transacciones.bulkAdd(transacciones);
+}
+
+async function addTransaccionesFirebase(transacciones) {
+    const col = window.getUserCollection('transacciones');
+    const batch = firebase.firestore().batch();
+
+    // Agregar todas las transacciones en un batch
+    transacciones.forEach(transaccion => {
+        const docRef = col.doc(); // Crear referencia con ID auto-generado
+        batch.set(docRef, {
+            ...transaccion,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    });
+
+    // Ejecutar batch en Firebase
+    await batch.commit();
+    console.log(`✅ ${transacciones.length} transacciones guardadas en Firebase`);
+}
+
 // Obtener transacciones por mes
 window.getTransaccionesByMes = async function(mesAnioId) {
     if (window.USE_FIREBASE && window.isAuthenticated()) {
@@ -122,6 +154,10 @@ async function addMesCargaFirebase(mes) {
         ...mes,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+
+    console.log(`🔥 Mes guardado en Firebase con ID: ${docRef.id}`);
+
+    // Retornar el ID de Firebase (string)
     return docRef.id;
 }
 
@@ -140,14 +176,34 @@ async function getMesesCargaIndexedDB() {
 
 async function getMesesCargaFirebase() {
     const col = window.getUserCollection('mesesCarga');
+
+    // FORZAR consulta desde servidor (no caché)
     const snapshot = await col
         .orderBy('fechaCarga', 'desc')
-        .get();
+        .get({ source: 'server' });
 
-    return snapshot.docs.map(doc => ({
+    console.log(`🔍 Snapshot metadata:`, {
+        fromCache: snapshot.metadata.fromCache,
+        hasPendingWrites: snapshot.metadata.hasPendingWrites,
+        size: snapshot.size
+    });
+
+    const mesesFirebase = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
     }));
+
+    console.log(`📦 Retornando ${mesesFirebase.length} meses desde Firebase (SERVIDOR, no caché)`);
+
+    if (mesesFirebase.length > 0) {
+        console.log('📋 Meses encontrados:', mesesFirebase.map(m => ({
+            id: m.id,
+            mesAnio: m.mesAnio,
+            perfilId: m.perfilId
+        })));
+    }
+
+    return mesesFirebase;
 }
 
 // Eliminar mes
@@ -174,9 +230,12 @@ async function deleteMesCargaIndexedDB(id) {
 }
 
 async function deleteMesCargaFirebase(id) {
+    console.log(`🗑️ Eliminando mes ${id} de Firebase...`);
+
     // Firebase: eliminar transacciones asociadas
     const transCol = window.getUserCollection('transacciones');
     const transSnapshot = await transCol.where('mesAnioId', '==', id).get();
+    console.log(`  📊 Encontradas ${transSnapshot.size} transacciones para eliminar`);
 
     const batch = window.firestore.batch();
     transSnapshot.docs.forEach(doc => {
@@ -186,6 +245,7 @@ async function deleteMesCargaFirebase(id) {
     // Eliminar presupuestos asociados
     const presupCol = window.getUserCollection('presupuestos');
     const presupSnapshot = await presupCol.where('mesAnioId', '==', id).get();
+    console.log(`  💰 Encontrados ${presupSnapshot.size} presupuestos para eliminar`);
     presupSnapshot.docs.forEach(doc => {
         batch.delete(doc.ref);
     });
@@ -193,8 +253,10 @@ async function deleteMesCargaFirebase(id) {
     // Eliminar el mes
     const mesDoc = window.getUserCollection('mesesCarga').doc(id);
     batch.delete(mesDoc);
+    console.log(`  📅 Eliminando mes con ID: ${id}`);
 
     await batch.commit();
+    console.log(`✅ Mes ${id} eliminado completamente de Firebase`);
 }
 
 /**

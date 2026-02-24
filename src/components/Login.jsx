@@ -109,7 +109,7 @@ const Login = () => {
                 {/* Footer */}
                 <div className="text-center mt-6">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                        © 2025 Finzi - v3.3
+                        © 2025 Finzi - v3.4.0
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                         Sincronización con Firebase

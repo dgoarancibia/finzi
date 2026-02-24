@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Verificar Firebase</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #00ff00;
+        }
+        pre {
+            background: #000;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button.danger {
+            background: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Verificador de Firebase</h1>
+    <button onclick="verificar()">Verificar Estado Firebase</button>
+    <button class="danger" onclick="borrarTodo()">🗑️ Borrar Todo de Firebase</button>
+
+    <pre id="output">Esperando...</pre>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBFzZleam4NK9XqQQ8rYS4Sb8Nhxa9xhFo",
+            authDomain: "finzi-bbdbc.firebaseapp.com",
+            projectId: "finzi-bbdbc",
+            storageBucket: "finzi-bbdbc.firebasestorage.app",
+            messagingSenderId: "1068955823447",
+            appId: "1:1068955823447:web:16968a73375fbf027fa212"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        async function verificar() {
+            const output = document.getElementById('output');
+            output.textContent = '🔄 Verificando...\n\n';
+
+            try {
+                const user = auth.currentUser;
+                if (!user) {
+                    output.textContent += '❌ No autenticado. Autenticándote...\n';
+                    await auth.signInAnonymously();
+                    output.textContent += '✅ Autenticado anónimamente\n';
+                }
+
+                const userId = auth.currentUser.email || 'anonymous';
+                output.textContent += `👤 Usuario: ${userId}\n\n`;
+
+                // Verificar meses
+                const mesesSnapshot = await db.collection(`users/${userId}/mesesCarga`).get();
+                output.textContent += `📅 MESES EN FIREBASE: ${mesesSnapshot.size}\n`;
+                mesesSnapshot.docs.forEach((doc, i) => {
+                    const data = doc.data();
+                    output.textContent += `  ${i+1}. ID: ${doc.id} | mesAnio: ${data.mesAnio} | perfilId: ${data.perfilId}\n`;
+                });
+
+                // Verificar transacciones
+                const transSnapshot = await db.collection(`users/${userId}/transacciones`).get();
+                output.textContent += `\n💰 TRANSACCIONES EN FIREBASE: ${transSnapshot.size}\n`;
+
+                // Contar por mes
+                const porMes = {};
+                transSnapshot.docs.forEach(doc => {
+                    const mesAnioId = doc.data().mesAnioId;
+                    porMes[mesAnioId] = (porMes[mesAnioId] || 0) + 1;
+                });
+
+                Object.entries(porMes).forEach(([mesId, count]) => {
+                    output.textContent += `  Mes ${mesId}: ${count} transacciones\n`;
+                });
+
+                // Verificar presupuestos
+                const presSnapshot = await db.collection(`users/${userId}/presupuestos`).get();
+                output.textContent += `\n💵 PRESUPUESTOS EN FIREBASE: ${presSnapshot.size}\n`;
+
+                output.textContent += '\n✅ Verificación completa';
+
+            } catch (error) {
+                output.textContent += `\n❌ Error: ${error.message}`;
+                console.error(error);
+            }
+        }
+
+        async function borrarTodo() {
+            if (!confirm('¿SEGURO que quieres BORRAR TODO de Firebase?\n\nEsto eliminará:\n- Todos los meses\n- Todas las transacciones\n- Todos los presupuestos\n\n¡NO SE PUEDE DESHACER!')) {
+                return;
+            }
+
+            const output = document.getElementById('output');
+            output.textContent = '🗑️ Borrando TODO de Firebase...\n\n';
+
+            try {
+                const user = auth.currentUser;
+                if (!user) {
+                    output.textContent += '❌ No autenticado\n';
+                    return;
+                }
+
+                const userId = user.email;
+                output.textContent += `👤 Usuario: ${userId}\n\n`;
+
+                // Borrar meses
+                output.textContent += '🔄 Borrando meses...\n';
+                const mesesSnapshot = await db.collection(`users/${userId}/mesesCarga`).get();
+                const batch1 = db.batch();
+                mesesSnapshot.docs.forEach(doc => batch1.delete(doc.ref));
+                await batch1.commit();
+                output.textContent += `✅ ${mesesSnapshot.size} meses eliminados\n`;
+
+                // Borrar transacciones (en lotes de 500)
+                output.textContent += '🔄 Borrando transacciones...\n';
+                let totalTrans = 0;
+                let transSnapshot = await db.collection(`users/${userId}/transacciones`).limit(500).get();
+                while (!transSnapshot.empty) {
+                    const batch = db.batch();
+                    transSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                    totalTrans += transSnapshot.size;
+                    output.textContent += `  ✓ ${transSnapshot.size} transacciones eliminadas\n`;
+                    transSnapshot = await db.collection(`users/${userId}/transacciones`).limit(500).get();
+                }
+                output.textContent += `✅ Total: ${totalTrans} transacciones eliminadas\n`;
+
+                // Borrar presupuestos
+                output.textContent += '🔄 Borrando presupuestos...\n';
+                const presSnapshot = await db.collection(`users/${userId}/presupuestos`).get();
+                if (!presSnapshot.empty) {
+                    const batch3 = db.batch();
+                    presSnapshot.docs.forEach(doc => batch3.delete(doc.ref));
+                    await batch3.commit();
+                    output.textContent += `✅ ${presSnapshot.size} presupuestos eliminados\n`;
+                }
+
+                output.textContent += '\n✅ TODO ELIMINADO DE FIREBASE\n';
+                output.textContent += '\n👉 Ahora recarga la app (Cmd + Shift + R)';
+
+            } catch (error) {
+                output.textContent += `\n❌ Error: ${error.message}`;
+                console.error(error);
+            }
+        }
+
+        // Auto-verificar al cargar
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                verificar();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -280,27 +280,24 @@ window.marcarSinEmparejar = async function(manual, motivo = 'No facturado') {
  * @returns {Object} - Resultado de la reconciliación
  */
 window.ejecutarReconciliacion = async function(mesAnio) {
-    // 1. Obtener transacciones manuales provisionales de este mes
-    const todasManuales = await db.transacciones
-        .where('origen')
-        .equals('manual')
-        .and(t => t.estado === 'provisional')
-        .toArray();
-
-    // Filtrar por mes
-    const manuales = todasManuales.filter(t => {
-        const fechaMes = t.fecha.substring(0, 7); // YYYY-MM
-        return fechaMes === mesAnio;
-    });
-
-    // 2. Obtener transacciones del CSV recién cargado
+    // 1. Obtener mesAnioObj primero
     const mesAnioObj = await db.mesesCarga.where('mesAnio').equals(mesAnio).first();
     if (!mesAnioObj) {
         return { error: 'Mes no encontrado' };
     }
 
-    // WORKAROUND: Usar .filter() manual en lugar de índice
+    // 2. WORKAROUND: Obtener todas las transacciones y filtrar manualmente
+    // (evita problemas con índices que pueden no estar creados correctamente)
     const todas = await db.transacciones.toArray();
+
+    // Filtrar transacciones manuales provisionales de este mes
+    const manuales = todas.filter(t => {
+        if (t.origen !== 'manual' || t.estado !== 'provisional') return false;
+        const fechaMes = t.fecha.substring(0, 7); // YYYY-MM
+        return fechaMes === mesAnio;
+    });
+
+    // Filtrar transacciones del CSV recién cargado
     const csvs = todas.filter(t => t.mesAnioId === mesAnioObj.id && t.origen === 'csv');
 
     // 3. Encontrar matches

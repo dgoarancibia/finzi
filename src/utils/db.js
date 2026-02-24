@@ -2,9 +2,10 @@
 window.db = new Dexie('GastosTCDatabase');
 
 // Definir el esquema de la base de datos
-db.version(11).stores({
-    // Meses cargados: registra cada mes con transacciones
-    mesesCarga: '++id, mesAnio, fechaCarga',
+db.version(13).stores({
+    // Meses cargados: registra cada mes con transacciones por perfil
+    // perfilId: permite que Diego y Marcela carguen el mismo mes por separado
+    mesesCarga: '++id, mesAnio, perfilId, fechaCarga',
 
     // Transacciones: todas las compras del CSV
     // Campos adicionales: esCompartido, porcentajePerfil, perfilCompartidoId
@@ -78,28 +79,48 @@ db.version(11).upgrade(tx => {
     });
 });
 
+// Migración de versión 11 a 12: forzar recreación de índices
+db.version(12).upgrade(tx => {
+    // Los índices se recrean automáticamente cuando se incrementa la versión
+    // Solo aseguramos que los campos existen
+    return tx.table('transacciones').toCollection().modify(transaccion => {
+        if (!transaccion.origen) {
+            transaccion.origen = 'csv';
+        }
+        if (!transaccion.estado) {
+            transaccion.estado = 'confirmado';
+        }
+    });
+});
+
 // Funciones auxiliares para trabajar con la DB
 
 /**
- * Obtiene o crea un mes de carga
+ * Obtiene o crea un mes de carga para un perfil específico
  * @param {string} mesAnio - Formato "YYYY-MM"
+ * @param {number} perfilId - ID del perfil (1=Diego, 2=Marcela, etc.)
  * @returns {Promise<number>} ID del mes
  */
-window.getOrCreateMesAnio = async function(mesAnio) {
-    const mesExistente = await db.mesesCarga
-        .where('mesAnio')
-        .equals(mesAnio)
-        .first();
+window.getOrCreateMesAnio = async function(mesAnio, perfilId) {
+    // Buscar en la fuente de datos correcta (Firebase o IndexedDB)
+    const mesesExistentes = await window.getMesesCarga();
+
+    // Buscar por mesAnio + perfilId para permitir que ambos perfiles carguen el mismo mes
+    const mesExistente = mesesExistentes.find(m => m.mesAnio === mesAnio && m.perfilId === perfilId);
 
     if (mesExistente) {
+        console.log(`✓ Mes ${mesAnio} (perfil ${perfilId}) ya existe con ID: ${mesExistente.id}`);
         return mesExistente.id;
     }
 
-    const id = await db.mesesCarga.add({
+    // Crear nuevo mes usando dataLayer (guarda en Firebase si está activo)
+    const id = await window.addMesCarga({
         mesAnio: mesAnio,
+        perfilId: perfilId,
         fechaCarga: new Date().toISOString()
     });
 
+    console.log(`✅ Mes ${mesAnio} (perfil ${perfilId}) creado con ID: ${id}`);
     return id;
 }
 
@@ -150,12 +171,11 @@ window.getTransaccionesFiltradas = async function(mesAnioId, filtros = {}) {
 
 /**
  * Agrega múltiples transacciones
+ * NOTA: Esta función ahora está en dataLayer.js para soportar Firebase
  * @param {Array} transacciones - Array de transacciones
  * @returns {Promise<void>}
  */
-window.addTransacciones = async function(transacciones) {
-    return await db.transacciones.bulkAdd(transacciones);
-}
+// window.addTransacciones - ahora manejado por dataLayer.js
 
 /**
  * Actualiza una transacción existente
@@ -245,12 +265,12 @@ window.deleteAllTransaccionesByMes = async function(mesAnioId) {
 
 /**
  * Elimina un mes completo y todas sus transacciones
- * @param {number} mesAnioId - ID del mes
+ * @param {string} mesAnioId - ID del mes (Firebase ID)
  * @returns {Promise<void>}
  */
 window.deleteMesCompleto = async function(mesAnioId) {
-    await deleteAllTransaccionesByMes(mesAnioId);
-    await db.mesesCarga.delete(mesAnioId);
+    // Usar deleteMesCarga de dataLayer que maneja Firebase
+    await window.deleteMesCarga(mesAnioId);
 }
 
 /**

@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analizador de Gastos TC v3.2</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Finzi - Analizador de Gastos</title>
 
     <!-- TailwindCSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -419,6 +422,10 @@
         /* INJECT:components/ModalCargarPDF.jsx */
     </script>
 
+    <script type="text/babel">
+        /* INJECT:components/Diagnostico.jsx */
+    </script>
+
     <!-- APP PRINCIPAL -->
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback, useContext, createContext, useRef } = React;
@@ -599,7 +606,9 @@
             }, []);
 
             const refreshMesesCargados = useCallback(async () => {
-                const meses = await db.mesesCarga.toArray();
+                console.log('🔄 Refrescando meses desde Firebase...');
+                const meses = await window.getMesesCarga();
+                console.log(`✅ Meses refrescados: ${meses.length}`);
                 setMesesCargados(meses);
             }, []);
 
@@ -657,6 +666,7 @@
                                 {currentPage === 'cuotasFuturas' && <CuotasFuturas />}
                                 {currentPage === 'recurrentes' && <Recurrentes />}
                                 {currentPage === 'simulador' && <Simulador />}
+                                {currentPage === 'diagnostico' && <Diagnostico />}
                             </div>
                         </main>
                         {/* Tour Guiado de Bienvenida */}

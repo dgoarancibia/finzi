@@ -29,16 +29,29 @@ window.extractTextFromPDF = async function(file) {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
 
-            // Extraer texto de cada item
-            const pageText = textContent.items
-                .map(item => item.str)
-                .join(' ');
+            // Extraer texto preservando saltos de línea
+            // Detectar cambios en posición Y para insertar saltos de línea
+            let lastY = null;
+            let pageText = '';
+
+            for (const item of textContent.items) {
+                const currentY = item.transform[5]; // Posición Y del item
+
+                // Si cambió la posición Y significativamente, es una nueva línea
+                if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+                    pageText += '\n';
+                }
+
+                pageText += item.str + ' ';
+                lastY = currentY;
+            }
 
             fullText += pageText + '\n';
             console.log(`✅ Página ${pageNum}: ${pageText.length} caracteres`);
         }
 
-        console.log('✅ [extractTextFromPDF] Extracción completa. Total:', fullText.length, 'caracteres');
+        const numLineas = fullText.split('\n').length;
+        console.log('✅ [extractTextFromPDF] Extracción completa. Total:', fullText.length, 'caracteres,', numLineas, 'líneas');
         return fullText;
     } catch (error) {
         console.error('❌ [extractTextFromPDF] Error:', error);
@@ -215,93 +228,215 @@ window.parsearBancoSantander = function(texto, mesAnio) {
 
 /**
  * Parser para Banco BCI
- * Formato tabular: LUGAR FECHA CODIGO DESCRIPCION LUGAR $ MONTO $ MONTO CUOTA $ MONTO
- * Ejemplo: SANTIAGO 17/09/25 2209 14634522 PAYU *UBER EATS SANTIAGO $33.944 $33.944 01/01 $33.944
+ * Formato: LUGAR FECHA CODIGO1 CODIGO2 DESCRIPCION TASA INT. X% $TOTAL $TOTAL CUOTA $MONTO
+ * Ejemplo: SANTIAGO 31/03/25 1010 10390130 MUNICIPALIDAD LAS C TASA INT. 0,00% $332.085 $332.085 06/06 $55.350
  */
 window.parsearBancoBCI = function(texto, mesAnio) {
     console.log('🔍 Parser BCI - Iniciando...');
     console.log(`📄 Longitud del texto: ${texto.length} caracteres`);
-    console.log(`📅 Mes/Año objetivo: ${mesAnio}`);
 
     const transacciones = [];
     const lineas = texto.split('\n');
     console.log(`📊 Total líneas a procesar: ${lineas.length}`);
 
-    // Patrón para BCI: fecha DD/MM/YY, dos códigos, descripción completa hasta el primer $
-    // Ejemplo: SANTIAGO 17/09/25 2209 14634522 PAYU *UBER EATS SANTIAGO $33.944 $33.944 01/01 $33.944
-    const patron = /(\d{2}\/\d{2}\/\d{2,4})\s+\d+\s+\d+\s+(.+?)\s+\$\s*([\d\.]+)/gi;
+    // =======================================================================
+    // PASO 1: EXTRAER TOTALES RESUMEN
+    // =======================================================================
+    console.log('\n📊 === EXTRAYENDO TOTALES RESUMEN ===');
 
-    let lineasProcesadas = 0;
-    let lineasDescartadas = 0;
-    let matchesEncontrados = 0;
+    const patronTotalCuotas = /TOTAL\s+COMPRAS\s+EN\s+CUOTAS\s+A\s+LA\s+CUENTA\s+\$\s*([\d\.,]+)/i;
+    const patronTotalComisiones = /CARGOS?,?\s+COMISIONES?,?\s+IMPUESTOS\s+Y\s+ABONOS.*?\$\s*([\d\.,]+)/i;
+
+    let totalCuotasEncontrado = null;
+    let totalComisionesEncontrado = null;
 
     for (const linea of lineas) {
-        lineasProcesadas++;
-
-        // Mostrar primeras 5 líneas para debug
-        if (lineasProcesadas <= 5) {
-            console.log(`📝 Línea ${lineasProcesadas}: ${linea.substring(0, 100)}...`);
+        const matchCuotas = linea.match(patronTotalCuotas);
+        if (matchCuotas && !totalCuotasEncontrado) {
+            totalCuotasEncontrado = normalizarMonto(matchCuotas[1]);
+            console.log(`✅ Total Cuotas encontrado: $${totalCuotasEncontrado}`);
         }
 
-        // Saltar líneas de encabezado, totales y secciones especiales
+        const matchComisiones = linea.match(patronTotalComisiones);
+        if (matchComisiones && !totalComisionesEncontrado) {
+            totalComisionesEncontrado = normalizarMonto(matchComisiones[1]);
+            console.log(`✅ Total Comisiones encontrado: $${totalComisionesEncontrado}`);
+        }
+    }
+
+    // =======================================================================
+    // PASO 2: EXTRAER TRANSACCIONES DETALLADAS
+    // =======================================================================
+    console.log('\n💳 === EXTRAYENDO TRANSACCIONES DETALLADAS ===');
+
+    // Patrón BCI: LUGAR FECHA CODIGO DESCRIPCION LUGAR $MONTO $MONTO CUOTA $MONTO
+    // Ejemplo: "SANTIAGO   17/09/25   2209 14634522   PAYU   *UBER EATS   SANTIAGO   $33.944   $33.944   01/01   $33.944"
+    const patron = /(\d{2}\/\d{2}\/\d{2})\s+\d+\s+\d+\s+(.+?)\s+\$\s*[\d\.,]+\s+\$\s*[\d\.,]+\s+(\d{2})\/(\d{2})\s+\$\s*([\d\.,]+)/i;
+
+    let totalSpot = 0;
+    let totalCuotasDetalle = 0;
+    let totalComisionesDetalle = 0;
+
+    let lineaNumero = 0;
+    let lineasConFecha = 0;
+    for (const linea of lineas) {
+        lineaNumero++;
+
+        // Saltar encabezados y totales
         const lineaLower = linea.toLowerCase();
-        if (lineaLower.includes('fecha') ||
-            lineaLower.includes('total ') ||
-            lineaLower.includes('subtotal') ||
-            lineaLower.includes('saldo ') ||
-            lineaLower.includes('cupo ') ||
-            lineaLower.includes('período') ||
-            lineaLower.includes('monto facturado') ||
-            lineaLower.includes('monto cancelado') ||
-            lineaLower.includes('tasa int')) {
-            lineasDescartadas++;
+        if (lineaLower.includes('fecha operación') || lineaLower.includes('total ') || lineaLower.includes('cargo')) {
             continue;
         }
 
-        const matches = [...linea.matchAll(patron)];
-        matchesEncontrados += matches.length;
-
-        if (matches.length > 0 && lineasProcesadas <= 5) {
-            console.log(`✅ Match encontrado en línea ${lineasProcesadas}`);
+        // Debug: mostrar TODAS las líneas que contienen fechas (formato DD/MM/YY)
+        if (/\d{2}\/\d{2}\/\d{2}/.test(linea)) {
+            lineasConFecha++;
+            if (lineasConFecha <= 20) { // Mostrar las primeras 20
+                console.log(`🔍 Línea ${lineaNumero}: "${linea}"`);
+            }
         }
 
-        for (const match of matches) {
-            let fechaStr = match[1];
-            let descripcion = match[2].trim();
-            const monto = normalizarMonto(match[3]);
+        const match = patron.exec(linea);
+        if (!match) {
+            // Intentar detectar comisiones (líneas especiales sin el formato estándar)
+            if (lineaLower.includes('cobro') && lineaLower.includes('mensual')) {
+                // Buscar: "COBRO ADM MENSUAL" o similar con monto
+                const matchComision = /cobro\s+adm\s+mensual.*?\$\s*([\d\.,]+)/i.exec(linea);
+                if (matchComision) {
+                    const monto = normalizarMonto(matchComision[1]);
 
-            // Convertir fecha DD/MM/YY a DD/MM/YYYY
-            if (fechaStr.length === 8) { // DD/MM/YY
-                const partes = fechaStr.split('/');
-                const anio = parseInt(partes[2]);
-                const anioCompleto = anio >= 0 && anio <= 50 ? 2000 + anio : 1900 + anio;
-                fechaStr = `${partes[0]}/${partes[1]}/${anioCompleto}`;
+                    transacciones.push({
+                        fecha: `${mesAnio}-01`,
+                        descripcion: 'COBRO ADM MENSUAL',
+                        comercio: 'COBRO ADM MENSUAL',
+                        monto: monto,
+                        cuotaActual: 1,
+                        cuotasTotal: 1,
+                        categoria: 'Comisiones y Seguros'
+                    });
+
+                    totalComisionesDetalle += monto;
+                    console.log(`✅ Comisión: COBRO ADM MENSUAL - $${monto}`);
+                }
             }
+            continue;
+        }
 
-            const fecha = normalizarFecha(fechaStr, parseInt(mesAnio.split('-')[0]));
+        let fechaStr = match[1];
+        let descripcion = match[2] ? match[2].trim() : '';
+        const cuotaActual = parseInt(match[3]);
+        const cuotasTotal = parseInt(match[4]);
+        let monto = normalizarMonto(match[5]);
 
-            // Limpiar descripción: puede tener ubicación al final
-            descripcion = descripcion.replace(/\s+(SANTIAGO|LAS CONDES|LA SERENA|PROVIDENCIA|CHILE|VITACURA|LA REINA)$/i, '');
+        // Detectar si es un abono/pago (monto negativo en el PDF)
+        if (linea.includes('MONTO CANCELADO') || linea.includes('$-')) {
+            console.log(`⚠️ Saltando abono/pago: ${descripcion} - $${monto}`);
+            continue; // Saltar abonos
+        }
 
-            // Filtrar transacciones que no son gastos (solo montos positivos)
-            if (monto > 0 && descripcion.length > 3 && !descripcion.match(/^[\d\s]+$/)) {
-                transacciones.push({
-                    fecha: fecha,
-                    descripcion: descripcion,
-                    comercio: descripcion.substring(0, 50),
-                    monto: monto
-                });
+        // Convertir fecha DD/MM/YY a DD/MM/YYYY
+        const partes = fechaStr.split('/');
+        const anio = parseInt(partes[2]);
+        const anioCompleto = anio >= 0 && anio <= 50 ? 2000 + anio : 1900 + anio;
+        fechaStr = `${partes[0]}/${partes[1]}/${anioCompleto}`;
+        const fecha = normalizarFecha(fechaStr, parseInt(mesAnio.split('-')[0]));
+
+        // Limpiar descripción: quitar el LUGAR que aparece al final
+        descripcion = descripcion.replace(/\s+(SANTIAGO|LAS CONDES|LA SERENA|PROVIDENCIA|VITACURA|LAS CONDES)$/i, '');
+        descripcion = descripcion.trim();
+
+        console.log(`✅ Transacción: ${descripcion} - $${monto} (${cuotaActual}/${cuotasTotal})`);
+
+        if (monto > 0 && descripcion.length > 2) {
+            // Detectar si es comisión por descripción
+            const esComision = /cobro.*mensual|comision|seguro/i.test(descripcion);
+
+            transacciones.push({
+                fecha: fecha,
+                descripcion: descripcion,
+                comercio: descripcion.substring(0, 50),
+                monto: monto,
+                cuotaActual: cuotaActual,
+                cuotasTotal: cuotasTotal,
+                categoria: esComision ? 'Comisiones y Seguros' : null
+            });
+
+            if (esComision) {
+                totalComisionesDetalle += monto;
+            } else if (cuotasTotal === 1) {
+                totalSpot += monto;
+            } else {
+                totalCuotasDetalle += monto;
             }
         }
     }
 
-    console.log(`📊 Resumen parser BCI:`);
-    console.log(`   - Líneas procesadas: ${lineasProcesadas}`);
-    console.log(`   - Líneas descartadas: ${lineasDescartadas}`);
-    console.log(`   - Matches del patrón: ${matchesEncontrados}`);
-    console.log(`   - Transacciones válidas: ${transacciones.length}`);
+    // =======================================================================
+    // PASO 3: AGREGAR TRANSACCIONES VIRTUALES POR DIFERENCIAS
+    // =======================================================================
+    console.log('\n🔄 === RECONCILIANDO TOTALES ===');
+    console.log(`📊 Total Spot (detalle): $${totalSpot}`);
+    console.log(`📊 Total Cuotas (detalle): $${totalCuotasDetalle}`);
+    console.log(`📊 Total Comisiones (detalle): $${totalComisionesDetalle}`);
+    console.log(`📊 Total Cuotas (resumen): $${totalCuotasEncontrado || 0}`);
+    console.log(`📊 Total Comisiones (resumen): $${totalComisionesEncontrado || 0}`);
 
-    // Si no encontró nada con el patrón específico, usar genérico como fallback
+    // Si hay total de comisiones en resumen pero no se capturaron en detalle,
+    // agregar toda la comisión como una sola transacción
+    if (totalComisionesEncontrado > 0 && totalComisionesDetalle === 0) {
+        console.log(`💡 Agregando comisión completa del resumen: $${totalComisionesEncontrado}`);
+        transacciones.push({
+            fecha: `${mesAnio}-01`,
+            descripcion: 'COBRO ADM MENSUAL',
+            comercio: 'COBRO ADM MENSUAL',
+            monto: totalComisionesEncontrado,
+            cuotaActual: 1,
+            cuotasTotal: 1,
+            categoria: 'Comisiones y Seguros'
+        });
+        totalComisionesDetalle = totalComisionesEncontrado;
+    }
+
+    const diferenciaCuotas = (totalCuotasEncontrado || 0) - totalCuotasDetalle;
+    const diferenciaComisiones = (totalComisionesEncontrado || 0) - totalComisionesDetalle;
+
+    console.log(`💡 Diferencia Cuotas: $${diferenciaCuotas}`);
+    console.log(`💡 Diferencia Comisiones: $${diferenciaComisiones}`);
+
+    if (diferenciaCuotas > 100) {
+        console.log(`✅ Agregando transacción virtual por cuotas de meses anteriores: $${diferenciaCuotas}`);
+        transacciones.push({
+            fecha: `${mesAnio}-01`,
+            descripcion: '💳 Cuotas de meses anteriores (no detalladas en PDF)',
+            comercio: 'Cuotas de meses anteriores',
+            monto: diferenciaCuotas,
+            cuotaActual: 0,
+            cuotasTotal: 0,
+            categoria: null,
+            esVirtual: true
+        });
+    }
+
+    if (diferenciaComisiones > 10) {
+        console.log(`✅ Agregando transacción virtual por comisiones adicionales: $${diferenciaComisiones}`);
+        transacciones.push({
+            fecha: `${mesAnio}-01`,
+            descripcion: '📋 Comisiones adicionales (no detalladas en PDF)',
+            comercio: 'Comisiones adicionales',
+            monto: diferenciaComisiones,
+            cuotaActual: 1,
+            cuotasTotal: 1,
+            categoria: 'Comisiones y Seguros',
+            esVirtual: true
+        });
+    }
+
+    console.log(`\n📊 Resumen parser BCI:`);
+    console.log(`   - Transacciones detalladas: ${transacciones.filter(t => !t.esVirtual).length}`);
+    console.log(`   - Transacciones virtuales: ${transacciones.filter(t => t.esVirtual).length}`);
+    console.log(`   - TOTAL TRANSACCIONES: ${transacciones.length}`);
+    console.log(`   - TOTAL MONTO: $${transacciones.reduce((sum, t) => sum + t.monto, 0)}`);
+
     if (transacciones.length === 0) {
         console.log('⚠️ Parser específico de BCI no encontró transacciones, usando genérico');
         return window.parsearBancoGenerico(texto, mesAnio);
@@ -314,6 +449,9 @@ window.parsearBancoBCI = function(texto, mesAnio) {
  * Parser para Banco de Chile / Edwards
  * Formato estado de cuenta: LUGAR DD/MM/YY CODIGO DESCRIPCION LUGAR $ MONTO...
  * Ejemplo: SANTIAGO 21/09/25 220910338388 COPEC APP SANTIAGO $ 50.308 $ 50.308 01/01 $ 50.308
+ *
+ * NOTA: Este parser extrae TANTO las transacciones detalladas COMO los totales resumen.
+ * Los totales resumen incluyen cuotas de meses anteriores que no aparecen en el detalle.
  */
 window.parsearBancoChile = function(texto, mesAnio) {
     console.log('🔍 Parser Banco Chile/Edwards - Iniciando...');
@@ -323,19 +461,74 @@ window.parsearBancoChile = function(texto, mesAnio) {
     const lineas = texto.split('\n');
     console.log(`📊 Total líneas a procesar: ${lineas.length}`);
 
-    // Patrón mejorado para Edwards estado de cuenta
-    // Captura: LUGAR (opcional) FECHA CODIGO DESCRIPCION ... $ MONTO
-    const patron = /(?:^|\s)(\d{2}\/\d{2}\/\d{2})\s+(\d+)\s+(.+?)\s+\$\s*([\d\.,]+)/g;
+    // =======================================================================
+    // PASO 1: EXTRAER TOTALES RESUMEN (para capturar cuotas de meses anteriores)
+    // =======================================================================
+    console.log('\n📊 === EXTRAYENDO TOTALES RESUMEN ===');
+
+    // Debug: Mostrar TODAS las líneas que contienen "TOTAL"
+    console.log('\n🔍 Líneas con "TOTAL":');
+    for (let i = 0; i < lineas.length; i++) {
+        if (lineas[i].toUpperCase().includes('TOTAL')) {
+            console.log(`   [${i}] ${lineas[i]}`);
+        }
+    }
+
+    // Patrones para los totales resumen de Edwards
+    // IMPORTANTE: Distinguir "EN CUOTAS" (plural) de "EN UNA CUOTA" (singular)
+    const patronTotalCuotas = /TOTAL\s+TRANSACCIONES\s+EN\s+CUOTAS\s/i;  // Plural: varias cuotas
+    const patronTotalComisiones = /TOTAL\s+CARGOS?,?\s+COMISIONES?/i;
+
+    let totalCuotasEncontrado = null;
+    let totalComisionesEncontrado = null;
+
+    for (const linea of lineas) {
+        const lineaUpper = linea.toUpperCase();
+
+        // Buscar "TOTAL TRANSACCIONES EN CUOTAS" (plural) - NO "EN UNA CUOTA"
+        if (patronTotalCuotas.test(lineaUpper) && !totalCuotasEncontrado && !lineaUpper.includes('EN UNA CUOTA')) {
+            // Extraer el último monto de la línea
+            const montos = [...linea.matchAll(/\$?\s*([\d\.,]+)/g)];
+            if (montos.length > 0) {
+                const ultimoMonto = montos[montos.length - 1][1];
+                totalCuotasEncontrado = normalizarMonto(ultimoMonto);
+                console.log(`✅ Total Cuotas encontrado: $${totalCuotasEncontrado}`);
+                console.log(`   Línea: "${linea.trim()}"`);
+            }
+        }
+
+        // Buscar total de comisiones
+        if (patronTotalComisiones.test(lineaUpper) && !totalComisionesEncontrado) {
+            const montos = [...linea.matchAll(/\$?\s*([\d\.,]+)/g)];
+            if (montos.length > 0) {
+                const ultimoMonto = montos[montos.length - 1][1];
+                totalComisionesEncontrado = normalizarMonto(ultimoMonto);
+                console.log(`✅ Total Comisiones encontrado: $${totalComisionesEncontrado}`);
+                console.log(`   Línea: "${linea.trim()}"`);
+            }
+        }
+    }
+
+    // =======================================================================
+    // PASO 2: EXTRAER TRANSACCIONES DETALLADAS
+    // =======================================================================
+    console.log('\n💳 === EXTRAYENDO TRANSACCIONES DETALLADAS ===');
+
+    // Patrón base: FECHA CODIGO DESCRIPCION
+    const patron = /(\d{2}\/\d{2}\/\d{2})\s+(\d+)\s+(.+)/;
 
     let lineasProcesadas = 0;
     let matchesEncontrados = 0;
+    let totalSpot = 0;
+    let totalCuotasDetalle = 0;
+    let totalComisionesDetalle = 0;
 
     for (const linea of lineas) {
         lineasProcesadas++;
 
-        // Mostrar primeras 10 líneas para debug
-        if (lineasProcesadas <= 10) {
-            console.log(`📝 Línea ${lineasProcesadas}: ${linea.substring(0, 120)}...`);
+        // Mostrar primeras 20 líneas para debug
+        if (lineasProcesadas <= 20) {
+            console.log(`📝 Línea ${lineasProcesadas}: ${linea.substring(0, 100)}...`);
         }
 
         // Saltar líneas de encabezado, totales y secciones especiales
@@ -349,70 +542,171 @@ window.parsearBancoChile = function(texto, mesAnio) {
             lineaLower.includes('monto facturado') ||
             lineaLower.includes('operación') ||
             lineaLower.includes('pagar hasta') ||
-            lineaLower.includes('impuesto decreto') ||
-            lineaLower.includes('comision mensual') ||
-            lineaLower.includes('intereses rotativo') ||
-            lineaLower.includes('intereses de mora') ||
             lineaLower.includes('traspaso deuda') ||
-            lineaLower.includes('devol. pago') ||
             lineaLower.includes('pago pesos') ||
             lineaLower.includes('pago pap') ||
             lineaLower.includes('tasa int')) {
             continue;
         }
 
-        const matches = [...linea.matchAll(patron)];
-        matchesEncontrados += matches.length;
+        const match = linea.match(patron);
+        if (!match) continue;
 
-        if (matches.length > 0 && lineasProcesadas <= 10) {
-            console.log(`✅ Match encontrado en línea ${lineasProcesadas}: ${matches.length} coincidencias`);
+        matchesEncontrados++;
+
+        let fechaStr = match[1];
+        const codigo = match[2];
+        let descripcion = match[3].trim();
+
+        // Convertir fecha DD/MM/YY a DD/MM/YYYY
+        if (fechaStr.length === 8) {
+            const partes = fechaStr.split('/');
+            const anio = parseInt(partes[2]);
+            const anioCompleto = anio >= 0 && anio <= 50 ? 2000 + anio : 1900 + anio;
+            fechaStr = `${partes[0]}/${partes[1]}/${anioCompleto}`;
         }
 
-        for (const match of matches) {
-            let fechaStr = match[1];
-            const codigo = match[2];
-            let descripcion = match[3].trim();
-            const monto = normalizarMonto(match[4]);
+        const fecha = normalizarFecha(fechaStr, parseInt(mesAnio.split('-')[0]));
 
-            // Convertir fecha DD/MM/YY a DD/MM/YYYY
-            if (fechaStr.length === 8) { // DD/MM/YY
-                const partes = fechaStr.split('/');
-                const anio = parseInt(partes[2]);
-                const anioCompleto = anio >= 0 && anio <= 50 ? 2000 + anio : 1900 + anio;
-                fechaStr = `${partes[0]}/${partes[1]}/${anioCompleto}`;
+        // Detectar cuotas y capturar el ÚLTIMO monto (monto de la cuota del mes)
+        let cuotaActual = 1;
+        let cuotasTotal = 1;
+        let monto = 0;
+
+        // Buscar TODOS los matches del patrón XX/YY $ MONTO y tomar el ÚLTIMO
+        const allMatchesCuotas = [...linea.matchAll(/(\d{2})\/(\d{2})\s*\$\s*([\d\.,]+)/g)];
+
+        // Debug: mostrar TODAS las transacciones
+        console.log(`🔍 [${matchesEncontrados}] ${linea.substring(0, 120)}`);
+        console.log(`   📦 Matches: ${allMatchesCuotas.length} | ${allMatchesCuotas.map(m => `${m[1]}/${m[2]}`).join(', ')}`);
+        if (allMatchesCuotas.length > 1) {
+            console.log(`   ⚠️ MÚLTIPLES MATCHES! Tomando último: ${allMatchesCuotas[allMatchesCuotas.length-1][1]}/${allMatchesCuotas[allMatchesCuotas.length-1][2]} $ ${allMatchesCuotas[allMatchesCuotas.length-1][3]}`);
+        }
+
+        if (allMatchesCuotas.length > 0) {
+            // Tomar el último match (el que tiene el monto de la cuota del mes)
+            const lastMatch = allMatchesCuotas[allMatchesCuotas.length - 1];
+            cuotaActual = parseInt(lastMatch[1]);
+            cuotasTotal = parseInt(lastMatch[2]);
+            monto = normalizarMonto(lastMatch[3]);
+            console.log(`📦 Cuota detectada: ${cuotaActual}/${cuotasTotal} - Monto: $${monto}`);
+        } else {
+            // Si no hay patrón de cuotas, buscar el primer monto en la línea
+            const matchMonto = descripcion.match(/\$\s*([\d\.,]+)/);
+            if (matchMonto) {
+                monto = normalizarMonto(matchMonto[1]);
             }
+        }
 
-            const fecha = normalizarFecha(fechaStr, parseInt(mesAnio.split('-')[0]));
+        if (monto === 0) continue;
 
-            // Limpiar descripción: remover ubicación repetida al final
-            descripcion = descripcion.replace(/\s+(SANTIAGO|LAS CONDES|LA SERENA|PROVIDENCIA|VITACURA|LA REINA|QUINTERO|UOA)\s*$/i, '');
+        // Limpiar descripción: remover ubicación y montos
+        descripcion = descripcion.replace(/\s+(SANTIAGO|LAS CONDES|LA SERENA|PROVIDENCIA|VITACURA|LA REINA|QUINTERO|UOA)\s/gi, ' ');
+        descripcion = descripcion.replace(/\s*\$\s*[\d\.,]+/g, '');
+        descripcion = descripcion.replace(/\s*\d{2}\/\d{2}\s*$/, '');
+        descripcion = descripcion.replace(/TASA INT\.\s*[\d,]+%/gi, '');
+        descripcion = descripcion.trim();
 
-            // Remover montos duplicados y cuotas que aparezcan en la descripción
-            descripcion = descripcion.replace(/\s+\$\s*[\d\.,]+.*$/g, '');
+        // Detectar tipo de transacción
+        const esDevolucion = lineaLower.includes('devol');
+        const esComision = lineaLower.includes('comision') || lineaLower.includes('comisión');
+        const esInteres = lineaLower.includes('interes') || lineaLower.includes('interés') || lineaLower.includes('mora');
+        const esImpuesto = lineaLower.includes('impuesto');
 
-            // Filtrar: solo montos positivos mayores a 100 (para evitar impuestos pequeños)
-            // y descripciones válidas (no solo números)
-            if (monto > 100 && descripcion.length > 3 && !descripcion.match(/^[\d\s]+$/)) {
-                transacciones.push({
-                    fecha: fecha,
-                    descripcion: descripcion.trim(),
-                    comercio: descripcion.substring(0, 50).trim(),
-                    monto: monto
-                });
+        // Si es devolución, el monto debe ser negativo
+        if (esDevolucion) {
+            monto = -Math.abs(monto);
+            descripcion = 'DEVOLUCIÓN - ' + descripcion;
+        }
 
-                if (transacciones.length <= 5) {
-                    console.log(`💳 Transacción ${transacciones.length}: ${fecha} - ${descripcion} - $${monto}`);
-                }
+        // Categorizar automáticamente
+        let categoria = null;
+        if (esComision || esInteres || esImpuesto) {
+            categoria = 'Comisiones y Seguros';
+            if (esComision) descripcion = 'Comisión Mensual';
+            else if (esInteres) descripcion = descripcion.includes('MORA') ? 'Intereses de Mora' : 'Intereses Rotativos';
+            else if (esImpuesto) descripcion = 'Impuesto Decreto Ley 3475';
+            totalComisionesDetalle += monto;
+            console.log(`✅ Comisión detectada: ${descripcion} - $${monto} - categoria: "${categoria}"`);
+        } else if (cuotasTotal > 1) {
+            totalCuotasDetalle += monto;
+        } else {
+            totalSpot += monto;
+        }
+
+        // Filtrar: descripciones válidas y montos significativos
+        if (descripcion.length > 2 && !descripcion.match(/^[\d\s]+$/)) {
+            transacciones.push({
+                fecha: fecha,
+                descripcion: descripcion.trim(),
+                comercio: descripcion.substring(0, 50).trim(),
+                monto: monto,
+                cuotaActual: cuotaActual,
+                cuotasTotal: cuotasTotal,
+                categoria: categoria
+            });
+
+            if (transacciones.length <= 5) {
+                console.log(`💳 Transacción ${transacciones.length}: ${fecha} - ${descripcion} - $${monto} [${cuotaActual}/${cuotasTotal}]`);
             }
         }
     }
 
-    console.log(`📊 Resumen parser Edwards:`);
+    // =======================================================================
+    // PASO 3: AGREGAR TRANSACCIONES VIRTUALES POR DIFERENCIAS EN TOTALES
+    // =======================================================================
+    console.log('\n🔄 === RECONCILIANDO TOTALES ===');
+    console.log(`📊 Total Spot (detalle): $${totalSpot}`);
+    console.log(`📊 Total Cuotas (detalle): $${totalCuotasDetalle}`);
+    console.log(`📊 Total Comisiones (detalle): $${totalComisionesDetalle}`);
+    console.log(`📊 Total Cuotas (resumen): $${totalCuotasEncontrado || 0}`);
+    console.log(`📊 Total Comisiones (resumen): $${totalComisionesEncontrado || 0}`);
+
+    // Calcular diferencias
+    const diferenciaCuotas = (totalCuotasEncontrado || 0) - totalCuotasDetalle;
+    const diferenciaComisiones = (totalComisionesEncontrado || 0) - totalComisionesDetalle;
+
+    console.log(`\n💡 Diferencia Cuotas: $${diferenciaCuotas}`);
+    console.log(`💡 Diferencia Comisiones: $${diferenciaComisiones}`);
+
+    // Agregar transacción virtual por cuotas de meses anteriores (si hay diferencia)
+    if (diferenciaCuotas > 100) { // Solo si la diferencia es significativa (>$100)
+        console.log(`✅ Agregando transacción virtual por cuotas de meses anteriores: $${diferenciaCuotas}`);
+        transacciones.push({
+            fecha: `${mesAnio}-01`, // Primer día del mes
+            descripcion: '💳 Cuotas de meses anteriores (no detalladas en PDF)',
+            comercio: 'Cuotas de meses anteriores',
+            monto: diferenciaCuotas,
+            cuotaActual: 0, // Marcar como "varias cuotas"
+            cuotasTotal: 0,
+            categoria: null,
+            esVirtual: true // Flag para identificarla
+        });
+    }
+
+    // Agregar transacción virtual por comisiones adicionales (si hay diferencia)
+    if (diferenciaComisiones > 10) {
+        console.log(`✅ Agregando transacción virtual por comisiones adicionales: $${diferenciaComisiones}`);
+        transacciones.push({
+            fecha: `${mesAnio}-01`,
+            descripcion: '📋 Comisiones adicionales (no detalladas en PDF)',
+            comercio: 'Comisiones adicionales',
+            monto: diferenciaComisiones,
+            cuotaActual: 1,
+            cuotasTotal: 1,
+            categoria: 'Comisiones y Seguros',
+            esVirtual: true
+        });
+    }
+
+    console.log(`\n📊 Resumen parser Edwards:`);
     console.log(`   - Líneas procesadas: ${lineasProcesadas}`);
     console.log(`   - Matches del patrón: ${matchesEncontrados}`);
-    console.log(`   - Transacciones válidas: ${transacciones.length}`);
+    console.log(`   - Transacciones detalladas: ${transacciones.filter(t => !t.esVirtual).length}`);
+    console.log(`   - Transacciones virtuales: ${transacciones.filter(t => t.esVirtual).length}`);
+    console.log(`   - TOTAL TRANSACCIONES: ${transacciones.length}`);
+    console.log(`   - TOTAL MONTO: $${transacciones.reduce((sum, t) => sum + t.monto, 0)}`);
 
-    // Si no encontró nada con el patrón específico, usar genérico como fallback
     if (transacciones.length === 0) {
         console.log('⚠️ Parser específico de Edwards no encontró transacciones, usando genérico');
         return window.parsearBancoGenerico(texto, mesAnio);

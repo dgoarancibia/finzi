@@ -2,12 +2,13 @@
 
 const ModalCargarPDF = ({ onClose, onSuccess }) => {
     const { perfiles } = useApp();
-    const [paso, setPaso] = useState(1); // 1: Mes/año + Banco, 2: Subir PDF, 3: Preview, 4: Confirmar
+    const [paso, setPaso] = useState(1); // 1: Mes/año + Banco, 2: Subir PDF, 2.5: Perfil y Modo, 3: Preview, 4: Confirmar
     const [anioSeleccionado, setAnioSeleccionado] = useState(new Date().getFullYear());
     const [mesSeleccionado, setMesSeleccionado] = useState(null);
     const [archivo, setArchivo] = useState(null);
     const [bancoSeleccionado, setBancoSeleccionado] = useState('');
     const [perfilSeleccionado, setPerfilSeleccionado] = useState(perfiles[0]?.id || 1);
+    const [modoRevision, setModoRevision] = useState('auto');
     const [transaccionesParsed, setTransaccionesParsed] = useState([]);
     const [procesando, setProcesando] = useState(false);
     const [error, setError] = useState(null);
@@ -46,11 +47,24 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
 
             setArchivo(file);
             setProcesando(false);
+            setPaso(2.5); // Ir a selección de perfil y modo
+
+        } catch (err) {
+            setError(err.message || 'Error al procesar el archivo');
+            setProcesando(false);
+        }
+    };
+
+    const handleProcesarPDF = async () => {
+        if (!archivo) return;
+
+        setProcesando(true);
+        setError(null);
+
+        try {
+            // Parsear el PDF
+            await parsearPDF(archivo);
             setPaso(3); // Ir a preview
-
-            // Parsear automáticamente - PASAR EL FILE DIRECTAMENTE
-            await parsearPDF(file);
-
         } catch (err) {
             setError(err.message || 'Error al procesar el archivo');
             setProcesando(false);
@@ -84,13 +98,14 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
 
             console.log('✅ [ModalPDF] parsearPDF completado. Transacciones:', resultado.transacciones?.length);
 
-            // Categorizar automáticamente las transacciones
+            // Categorizar automáticamente las transacciones (solo si no tienen categoría del parser)
             const transaccionesCategorizadas = resultado.transacciones.map(t => {
-                const categoriaSugerida = window.categorizarTransaccion(t.descripcion, t.comercio);
+                // Si el parser ya asignó una categoría (ej: "Comisiones y Seguros"), respetarla
+                const categoriaFinal = t.categoria || window.categorizarTransaccion(t.descripcion, t.comercio);
 
                 return {
                     ...t,
-                    categoria: categoriaSugerida,
+                    categoria: categoriaFinal,
                     perfilId: perfilSeleccionado,
                     esCompartido: false,
                     esReembolsable: false,
@@ -121,8 +136,8 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
         try {
             const mesAnio = `${anioSeleccionado}-${String(mesSeleccionado + 1).padStart(2, '0')}`;
 
-            // Obtener o crear mes
-            const mesAnioId = await getOrCreateMesAnio(mesAnio);
+            // Obtener o crear mes para este perfil específico
+            const mesAnioId = await getOrCreateMesAnio(mesAnio, perfilSeleccionado);
 
             // Agregar transacciones (marcadas como 'csv' y 'confirmado')
             const transaccionesParaGuardar = transaccionesParsed.map(t => ({
@@ -321,6 +336,98 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
                     </div>
                 )}
 
+                {/* Paso 2.5: Seleccionar perfil y modo */}
+                {paso === 2.5 && (
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Perfil y modo</h3>
+
+                        {/* Selector de Perfil */}
+                        <div>
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">¿De quién es este PDF?</p>
+                            <div className="grid grid-cols-1 gap-3">
+                                {perfiles.map(perfil => (
+                                    <button
+                                        key={perfil.id}
+                                        onClick={() => setPerfilSeleccionado(perfil.id)}
+                                        className={`p-4 rounded-lg border-2 transition-colors ${
+                                            perfilSeleccionado === perfil.id
+                                                ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
+                                                : 'border-gray-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-indigo-700'
+                                        }`}
+                                    >
+                                        <div className="flex items-center space-x-3">
+                                            <div
+                                                className="w-4 h-4 rounded-full"
+                                                style={{ backgroundColor: perfil.color }}
+                                            />
+                                            <span className="font-semibold text-gray-900 dark:text-white">{perfil.nombre}</span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Selector de Modo de Revisión */}
+                        <div className="border-t border-gray-200 dark:border-slate-700 pt-4">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Modo de revisión:</p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => setModoRevision('auto')}
+                                    className={`p-4 rounded-lg border-2 transition-colors ${
+                                        modoRevision === 'auto'
+                                            ? 'border-green-600 bg-green-50 dark:bg-green-900/20'
+                                            : 'border-gray-200 dark:border-slate-600 hover:border-green-300 dark:hover:border-green-700'
+                                    }`}
+                                >
+                                    <div className="text-center">
+                                        <span className="text-3xl block mb-2">⚡</span>
+                                        <p className="font-semibold text-gray-800 dark:text-white">Auto</p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                            Categorización automática
+                                        </p>
+                                    </div>
+                                </button>
+
+                                <button
+                                    onClick={() => setModoRevision('manual')}
+                                    className={`p-4 rounded-lg border-2 transition-colors ${
+                                        modoRevision === 'manual'
+                                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                                            : 'border-gray-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-700'
+                                    }`}
+                                >
+                                    <div className="text-center">
+                                        <span className="text-3xl block mb-2">👁️</span>
+                                        <p className="font-semibold text-gray-800 dark:text-white">Manual</p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                            Revisar una por una
+                                        </p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={() => {
+                                    setPaso(2);
+                                    setArchivo(null);
+                                }}
+                                className="flex-1 px-6 py-2 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700"
+                            >
+                                Atrás
+                            </button>
+                            <button
+                                onClick={handleProcesarPDF}
+                                disabled={procesando}
+                                className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 font-semibold"
+                            >
+                                {procesando ? 'Procesando...' : 'Continuar'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Paso 3: Preview */}
                 {paso === 3 && (
                     <div className="space-y-4">
@@ -331,6 +438,68 @@ const ModalCargarPDF = ({ onClose, onSuccess }) => {
                             <p className="text-sm text-gray-600 dark:text-gray-400">
                                 Revisa que las transacciones se hayan extraído correctamente
                             </p>
+                        </div>
+
+                        {/* Resumen del Total con Desglose */}
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <p className="text-sm text-indigo-600 dark:text-indigo-400 font-medium">Total de Gastos</p>
+                                    <p className="text-xs text-indigo-500 dark:text-indigo-500 mt-0.5">Verifica con el total de tu estado de cuenta</p>
+                                </div>
+                                <p className="text-3xl font-bold text-indigo-900 dark:text-indigo-100">
+                                    {formatearMonto(transaccionesParsed.reduce((sum, t) => sum + t.monto, 0))}
+                                </p>
+                            </div>
+
+                            {/* Desglose: Spot, Cuotas, Comisiones */}
+                            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-indigo-200 dark:border-indigo-800">
+                                <div className="text-center">
+                                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Spot</p>
+                                    <p className="text-sm font-bold text-indigo-900 dark:text-indigo-100">
+                                        {(() => {
+                                            // Debug: Inspect first and potential commission transactions
+                                            console.log('🔍 [DEBUG] First transaction:', JSON.stringify(transaccionesParsed[0]));
+                                            console.log('🔍 [DEBUG] Transaction #66 (should be commission):', JSON.stringify(transaccionesParsed[65]));
+                                            console.log('🔍 [DEBUG] Total transactions:', transaccionesParsed.length);
+                                            console.log('🔍 [DEBUG] Transactions with categoria property:', transaccionesParsed.filter(t => t.categoria !== undefined).length);
+                                            console.log('🔍 [DEBUG] Transactions with categoria === "Comisiones y Seguros":', transaccionesParsed.filter(t => t.categoria === 'Comisiones y Seguros').length);
+
+                                            const spotTransacciones = transaccionesParsed.filter(t => t.cuotasTotal === 1 && t.categoria !== 'Comisiones y Seguros' && !t.esVirtual);
+                                            const totalSpot = spotTransacciones.reduce((sum, t) => sum + t.monto, 0);
+                                            console.log('💰 [Modal Desglose] Spot:', spotTransacciones.length, 'transacciones, Total:', totalSpot);
+                                            return formatearMonto(totalSpot);
+                                        })()}
+                                    </p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Cuotas</p>
+                                    <p className="text-sm font-bold text-indigo-900 dark:text-indigo-100">
+                                        {(() => {
+                                            const cuotasTransacciones = transaccionesParsed.filter(t =>
+                                                (t.cuotasTotal > 1) ||
+                                                (t.esVirtual && t.cuotasTotal === 0 && t.categoria !== 'Comisiones y Seguros')
+                                            );
+                                            const totalCuotas = cuotasTransacciones.reduce((sum, t) => sum + t.monto, 0);
+                                            console.log('💳 [Modal Desglose] Cuotas:', cuotasTransacciones.length, 'transacciones, Total:', totalCuotas);
+                                            cuotasTransacciones.forEach(t => console.log('  -', t.descripcion, t.monto, 'cuotasTotal:', t.cuotasTotal, 'esVirtual:', t.esVirtual));
+                                            return formatearMonto(totalCuotas);
+                                        })()}
+                                    </p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Comisiones</p>
+                                    <p className="text-sm font-bold text-indigo-900 dark:text-indigo-100">
+                                        {(() => {
+                                            const comisionesTransacciones = transaccionesParsed.filter(t => t.categoria === 'Comisiones y Seguros');
+                                            const totalComisiones = comisionesTransacciones.reduce((sum, t) => sum + t.monto, 0);
+                                            console.log('📋 [Modal Desglose] Comisiones:', comisionesTransacciones.length, 'transacciones, Total:', totalComisiones);
+                                            comisionesTransacciones.forEach(t => console.log('  -', t.descripcion, t.monto, 'categoria:', t.categoria));
+                                            return formatearMonto(totalComisiones);
+                                        })()}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Lista de transacciones */}

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Limpiar Caché Firestore</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 5px;
+            width: calc(100% - 10px);
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🧹 Limpiar Caché de Firestore</h1>
+        <p>Esta página limpiará COMPLETAMENTE el caché offline de Firestore.</p>
+
+        <button class="btn-danger" onclick="limpiarTodo()">
+            🗑️ Limpiar Caché de Firestore
+        </button>
+
+        <div id="output" class="output">Esperando acción...</div>
+
+        <button class="btn-success" onclick="irAApp()" style="margin-top: 20px;">
+            ✅ Ir a la Aplicación
+        </button>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBFzZleam4NK9XqQQ8rYS4Sb8Nhxa9xhFo",
+            authDomain: "finzi-bbdbc.firebaseapp.com",
+            projectId: "finzi-bbdbc",
+            storageBucket: "finzi-bbdbc.firebasestorage.app",
+            messagingSenderId: "1068955823447",
+            appId: "1:1068955823447:web:16968a73375fbf027fa212"
+        };
+
+        async function limpiarTodo() {
+            const output = document.getElementById('output');
+            output.className = 'output';
+            output.textContent = '🔄 Limpiando caché de Firestore...\n\n';
+
+            try {
+                // IMPORTANTE: Inicializar Firebase SIN persistencia
+                firebase.initializeApp(firebaseConfig);
+                const db = firebase.firestore();
+
+                output.textContent += '✅ Firebase inicializado (sin persistencia)\n';
+
+                // Limpiar persistencia de Firestore
+                output.textContent += '🔄 Limpiando caché offline de Firestore...\n';
+                await db.clearPersistence();
+                output.textContent += '✅ Caché de Firestore eliminado\n\n';
+
+                // Limpiar localStorage
+                output.textContent += '🔄 Limpiando localStorage...\n';
+                localStorage.clear();
+                output.textContent += '✅ localStorage limpiado\n';
+
+                // Limpiar sessionStorage
+                output.textContent += '🔄 Limpiando sessionStorage...\n';
+                sessionStorage.clear();
+                output.textContent += '✅ sessionStorage limpiado\n';
+
+                // Limpiar cachés del navegador
+                if ('caches' in window) {
+                    output.textContent += '🔄 Limpiando cachés del navegador...\n';
+                    const cacheNames = await caches.keys();
+                    for (const cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                    }
+                    output.textContent += `✅ ${cacheNames.length} cachés eliminados\n`;
+                }
+
+                // Limpiar IndexedDB de Firestore manualmente
+                output.textContent += '\n🔄 Limpiando bases de datos IndexedDB...\n';
+                const databases = await indexedDB.databases();
+                let dbsEliminadas = 0;
+
+                for (const dbInfo of databases) {
+                    const dbName = dbInfo.name;
+                    output.textContent += `  🗑️ Eliminando: ${dbName}\n`;
+                    await new Promise((resolve, reject) => {
+                        const req = indexedDB.deleteDatabase(dbName);
+                        req.onsuccess = () => {
+                            dbsEliminadas++;
+                            resolve();
+                        };
+                        req.onerror = reject;
+                        req.onblocked = () => {
+                            output.textContent += `  ⚠️ ${dbName} bloqueada (cierra otras pestañas)\n`;
+                            resolve();
+                        };
+                    });
+                }
+
+                output.textContent += `✅ ${dbsEliminadas} bases de datos eliminadas\n\n`;
+
+                output.textContent += '═══════════════════════════════\n';
+                output.textContent += '✨ LIMPIEZA COMPLETA EXITOSA\n';
+                output.textContent += '═══════════════════════════════\n\n';
+                output.textContent += '👉 Ahora haz clic en "Ir a la Aplicación"\n';
+                output.textContent += '   y deberías ver 0 meses cargados.\n';
+
+                output.className = 'output success';
+
+            } catch (error) {
+                output.className = 'output error';
+                output.textContent += `\n❌ Error: ${error.message}\n`;
+                output.textContent += `\nDetalles técnicos:\n${error.stack}`;
+                console.error('Error completo:', error);
+            }
+        }
+
+        function irAApp() {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

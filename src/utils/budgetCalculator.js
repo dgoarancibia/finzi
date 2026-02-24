@@ -126,7 +126,11 @@ window.calcularDesglose = function(transacciones) {
     let cuotasAnteriores = 0;
 
     for (const t of transacciones) {
-        if (!t.cuotaActual || (t.cuotaActual === 1 && t.cuotasTotal === 1)) {
+        // Detectar transacción virtual de cuotas de meses anteriores
+        // Estas tienen cuotasTotal: 0 como marcador especial
+        if (t.cuotasTotal === 0 && t.esVirtual) {
+            cuotasAnteriores += t.monto;
+        } else if (!t.cuotaActual || (t.cuotaActual === 1 && t.cuotasTotal === 1)) {
             // Compra spot: sin cuotas O pago del mes (1/1)
             spot += t.monto;
         } else if (t.cuotaActual === 1) {

@@ -102,8 +102,12 @@
             <strong>⚠️ Advertencia:</strong> Esta acción no se puede deshacer. Todos tus datos se perderán permanentemente.
         </div>
 
-        <button class="btn btn-danger" onclick="resetearTodo()">
-            🗑️ Eliminar Toda la Data
+        <button class="btn btn-secondary" onclick="resetearSoloLocal()" style="background: #f59e0b; color: white;">
+            💾 Limpiar Solo IndexedDB Local
+        </button>
+
+        <button class="btn btn-danger" onclick="resetearTodo()" style="margin-top: 10px;">
+            🗑️ Eliminar Todo (Firebase + Local)
         </button>
 
         <button class="btn btn-secondary" onclick="volverApp()" style="margin-top: 10px;">
@@ -113,11 +117,31 @@
         <div id="output" class="output"></div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
     <script>
+        // Configuración de Firebase (la misma de tu app)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBFzZleam4NK9XqQQ8rYS4Sb8Nhxa9xhFo",
+            authDomain: "finzi-bbdbc.firebaseapp.com",
+            projectId: "finzi-bbdbc",
+            storageBucket: "finzi-bbdbc.firebasestorage.app",
+            messagingSenderId: "1068955823447",
+            appId: "1:1068955823447:web:16968a73375fbf027fa212"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db_firebase = firebase.firestore();
+
         // Inicializar Dexie con la versión correcta
         const db = new Dexie('GastosTCDatabase');
-        db.version(9).stores({
-            mesesCarga: '++id, mesAnio, fechaCarga',
+        db.version(13).stores({
+            mesesCarga: '++id, mesAnio, perfilId, fechaCarga',
             transacciones: '++id, mesAnioId, perfilId, fecha, categoria, comercio, esCompartido, esReembolsable, reembolsoId',
             presupuestos: '++id, mesAnioId, categoria, monto, esPlantilla',
             recurrentes: '++id, nombre, categoria, perfilId, montoEstimado, activa, ultimoMes',
@@ -129,7 +153,7 @@
         });
 
         async function resetearTodo() {
-            const confirmacion = confirm('¿Estás SEGURO de que quieres eliminar TODA la data?\n\nEsta acción NO se puede deshacer.');
+            const confirmacion = confirm('¿Estás SEGURO de que quieres eliminar TODA la data?\n\nEsto incluye:\n- IndexedDB local\n- Firebase (nube)\n- localStorage\n- sessionStorage\n\nEsta acción NO se puede deshacer.');
 
             if (!confirmacion) {
                 return;
@@ -143,52 +167,99 @@
             try {
                 let mensajes = [];
 
-                // 1. Limpiar localStorage
-                const itemsLocalStorage = ['categorias', 'perfiles', 'patronesAprendidos'];
-                itemsLocalStorage.forEach(item => {
-                    localStorage.removeItem(item);
+                // 1. Limpiar Firebase (si el usuario está autenticado)
+                const user = auth.currentUser;
+                if (user) {
+                    mensajes.push('🔥 Limpiando Firebase...');
+                    const userId = user.email;
+
+                    // Eliminar meses
+                    const mesesSnapshot = await db_firebase.collection(`users/${userId}/mesesCarga`).get();
+                    const batch1 = db_firebase.batch();
+                    mesesSnapshot.docs.forEach(doc => batch1.delete(doc.ref));
+                    await batch1.commit();
+                    mensajes.push(`✓ ${mesesSnapshot.size} meses eliminados de Firebase`);
+
+                    // Eliminar transacciones (en lotes de 500 por límite de Firestore)
+                    let transSnapshot = await db_firebase.collection(`users/${userId}/transacciones`).limit(500).get();
+                    while (!transSnapshot.empty) {
+                        const batch = db_firebase.batch();
+                        transSnapshot.docs.forEach(doc => batch.delete(doc.ref));
+                        await batch.commit();
+                        mensajes.push(`✓ ${transSnapshot.size} transacciones eliminadas de Firebase`);
+                        transSnapshot = await db_firebase.collection(`users/${userId}/transacciones`).limit(500).get();
+                    }
+
+                    // Eliminar presupuestos
+                    const presSnapshot = await db_firebase.collection(`users/${userId}/presupuestos`).get();
+                    if (!presSnapshot.empty) {
+                        const batch3 = db_firebase.batch();
+                        presSnapshot.docs.forEach(doc => batch3.delete(doc.ref));
+                        await batch3.commit();
+                        mensajes.push(`✓ ${presSnapshot.size} presupuestos eliminados de Firebase`);
+                    }
+
+                    mensajes.push('✓ Firebase completamente limpiado');
+                } else {
+                    mensajes.push('⚠️ No autenticado en Firebase - solo se limpiará IndexedDB local');
+                }
+
+                // 2. Limpiar TODO el localStorage
+                localStorage.clear();
+                mensajes.push('✓ localStorage completamente limpiado');
+
+                // 3. Limpiar TODO el sessionStorage
+                sessionStorage.clear();
+                mensajes.push('✓ sessionStorage limpiado');
+
+                // 4. Limpiar todos los cachés del navegador (Cache API)
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (const cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                    }
+                    mensajes.push(`✓ ${cacheNames.length} cachés del navegador eliminados`);
+                }
+
+                // 5. Cerrar la conexión actual a la BD
+                db.close();
+                mensajes.push('✓ Conexión a BD cerrada');
+
+                // 6. ELIMINAR COMPLETAMENTE la base de datos IndexedDB
+                await Dexie.delete('GastosTCDatabase');
+                mensajes.push('✓ Base de datos IndexedDB eliminada completamente');
+
+                // 7. Recrear la base de datos desde cero
+                const dbNueva = new Dexie('GastosTCDatabase');
+                dbNueva.version(13).stores({
+                    mesesCarga: '++id, mesAnio, perfilId, fechaCarga',
+                    transacciones: '++id, mesAnioId, perfilId, fecha, categoria, comercio, esCompartido, esReembolsable, reembolsoId',
+                    presupuestos: '++id, mesAnioId, categoria, monto, esPlantilla',
+                    recurrentes: '++id, nombre, categoria, perfilId, montoEstimado, activa, ultimoMes',
+                    historialRecurrentes: '++id, recurrenteId, mesAnio, monto, fecha',
+                    comprasPlaneadas: '++id, nombre, monto, cuotas, categoria, perfilId, fechaCreacion',
+                    liquidaciones: '++id, mesAnioId, mesAnio, deudorId, acreedorId, monto, fecha, gastosIncluidos',
+                    ingresos: '++id, mesAnio, perfilId, monto, descripcion, fecha, esRecurrente',
+                    reembolsos: '++id, transaccionOrigenId, nombreDeudor, estado, tipoCompra, cuotasTotal, fechaCreacion, fechaSolicitud, fechaPago'
                 });
-                mensajes.push('✓ localStorage limpiado');
+                await dbNueva.open();
+                mensajes.push('✓ Base de datos recreada desde cero');
 
-                // 2. Eliminar todas las tablas de IndexedDB
-                await db.mesesCarga.clear();
-                mensajes.push('✓ Meses cargados eliminados');
-
-                await db.transacciones.clear();
-                mensajes.push('✓ Transacciones eliminadas');
-
-                await db.presupuestos.clear();
-                mensajes.push('✓ Presupuestos eliminados');
-
-                await db.recurrentes.clear();
-                mensajes.push('✓ Recurrentes eliminados');
-
-                await db.historialRecurrentes.clear();
-                mensajes.push('✓ Historial de recurrentes eliminado');
-
-                await db.comprasPlaneadas.clear();
-                mensajes.push('✓ Compras planeadas eliminadas');
-
-                await db.liquidaciones.clear();
-                mensajes.push('✓ Liquidaciones eliminadas');
-
-                await db.ingresos.clear();
-                mensajes.push('✓ Ingresos eliminados');
-
-                // Contar registros restantes
-                const totalMeses = await db.mesesCarga.count();
-                const totalTransacciones = await db.transacciones.count();
-                const totalPresupuestos = await db.presupuestos.count();
+                // Verificar que está limpia
+                const totalMeses = await dbNueva.mesesCarga.count();
+                const totalTransacciones = await dbNueva.transacciones.count();
+                const totalPresupuestos = await dbNueva.presupuestos.count();
 
                 mensajes.push('');
-                mensajes.push('📊 Verificación:');
+                mensajes.push('📊 Verificación IndexedDB:');
                 mensajes.push(`   Meses: ${totalMeses}`);
                 mensajes.push(`   Transacciones: ${totalTransacciones}`);
                 mensajes.push(`   Presupuestos: ${totalPresupuestos}`);
                 mensajes.push('');
-                mensajes.push('✅ Base de datos completamente limpia!');
+                mensajes.push('✅ RESET COMPLETO EXITOSO!');
                 mensajes.push('');
-                mensajes.push('👉 Ahora puedes cerrar esta ventana y recargar la aplicación principal.');
+                mensajes.push('🔄 Todo limpiado: IndexedDB, Firebase, localStorage, sessionStorage y cachés.');
+                mensajes.push('👉 Ahora RECARGA la aplicación principal (Cmd + Shift + R) para empezar desde cero.');
 
                 output.className = 'output success';
                 output.innerHTML = '<pre>' + mensajes.join('\n') + '</pre>';
@@ -200,6 +271,90 @@
                     <strong>❌ Error al eliminar datos:</strong><br>
                     ${error.message}<br><br>
                     <small>Revisa la consola para más detalles.</small>
+                `;
+            }
+        }
+
+        async function resetearSoloLocal() {
+            const confirmacion = confirm('¿Estás SEGURO de que quieres eliminar SOLO la base de datos local (IndexedDB)?\n\nEsto NO afectará Firebase (nube).\n\nEsta acción NO se puede deshacer.');
+
+            if (!confirmacion) {
+                return;
+            }
+
+            const output = document.getElementById('output');
+            output.className = 'output';
+            output.textContent = '🔄 Limpiando IndexedDB local...';
+            output.style.display = 'block';
+
+            try {
+                let mensajes = [];
+
+                // 1. Limpiar localStorage
+                localStorage.clear();
+                mensajes.push('✓ localStorage limpiado');
+
+                // 2. Limpiar sessionStorage
+                sessionStorage.clear();
+                mensajes.push('✓ sessionStorage limpiado');
+
+                // 3. Limpiar cachés del navegador
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (const cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                    }
+                    mensajes.push(`✓ ${cacheNames.length} cachés eliminados`);
+                }
+
+                // 4. Cerrar conexión a la BD
+                db.close();
+                mensajes.push('✓ Conexión a BD cerrada');
+
+                // 5. ELIMINAR IndexedDB
+                await Dexie.delete('GastosTCDatabase');
+                mensajes.push('✓ IndexedDB eliminada');
+
+                // 6. Recrear BD limpia
+                const dbNueva = new Dexie('GastosTCDatabase');
+                dbNueva.version(13).stores({
+                    mesesCarga: '++id, mesAnio, perfilId, fechaCarga',
+                    transacciones: '++id, mesAnioId, perfilId, fecha, categoria, comercio, esCompartido, esReembolsable, reembolsoId',
+                    presupuestos: '++id, mesAnioId, categoria, monto, esPlantilla',
+                    recurrentes: '++id, nombre, categoria, perfilId, montoEstimado, activa, ultimoMes',
+                    historialRecurrentes: '++id, recurrenteId, mesAnio, monto, fecha',
+                    comprasPlaneadas: '++id, nombre, monto, cuotas, categoria, perfilId, fechaCreacion',
+                    liquidaciones: '++id, mesAnioId, mesAnio, deudorId, acreedorId, monto, fecha, gastosIncluidos',
+                    ingresos: '++id, mesAnio, perfilId, monto, descripcion, fecha, esRecurrente',
+                    reembolsos: '++id, transaccionOrigenId, nombreDeudor, estado, tipoCompra, cuotasTotal, fechaCreacion, fechaSolicitud, fechaPago'
+                });
+                await dbNueva.open();
+                mensajes.push('✓ IndexedDB recreada');
+
+                // Verificar
+                const totalMeses = await dbNueva.mesesCarga.count();
+                const totalTransacciones = await dbNueva.transacciones.count();
+
+                mensajes.push('');
+                mensajes.push('📊 Verificación:');
+                mensajes.push(`   Meses: ${totalMeses}`);
+                mensajes.push(`   Transacciones: ${totalTransacciones}`);
+                mensajes.push('');
+                mensajes.push('✅ LIMPIEZA LOCAL EXITOSA!');
+                mensajes.push('');
+                mensajes.push('💡 Firebase NO fue afectado. Tus datos en la nube están intactos.');
+                mensajes.push('👉 Recarga la app (Cmd + Shift + R) para sincronizar desde Firebase.');
+
+                output.className = 'output success';
+                output.innerHTML = '<pre>' + mensajes.join('\n') + '</pre>';
+
+            } catch (error) {
+                console.error('Error al limpiar local:', error);
+                output.className = 'output error';
+                output.innerHTML = `
+                    <strong>❌ Error:</strong><br>
+                    ${error.message}<br><br>
+                    <small>Revisa la consola.</small>
                 `;
             }
         }

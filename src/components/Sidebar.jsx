@@ -97,7 +97,8 @@ const Sidebar = () => {
             items: [
                 { id: 'perfiles', icon: '👥', label: 'Perfiles' },
                 { id: 'categorias', icon: '🏷️', label: 'Categorías' },
-                { id: 'presupuestos', icon: '💸', label: 'Presupuestos' }
+                { id: 'presupuestos', icon: '💸', label: 'Presupuestos' },
+                { id: 'diagnostico', icon: '🔍', label: 'Diagnóstico' }
             ]
         },
         {
@@ -147,7 +148,7 @@ const Sidebar = () => {
                         {isSidebarOpen ? (
                             <div className="animate-slideIn flex-1">
                                 <LogoFinzi className="text-gray-900 dark:text-white mb-1 scale-90 lg:scale-100" />
-                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium hidden lg:block">v3.2 - Gastos TC</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium hidden lg:block">Analizador de Gastos</p>
                             </div>
                         ) : (
                             <div className="mx-auto">
@@ -352,7 +353,7 @@ const Sidebar = () => {
                     {isSidebarOpen ? (
                         <div className="text-center text-xs text-gray-500 dark:text-gray-400">
                             <p className="font-medium">© 2025 Finzi</p>
-                            <p className="mt-1">v3.3.2 - 11 Nov 2025</p>
+                            <p className="mt-1">v3.5.0 - 12 Nov 2025</p>
                         </div>
                     ) : (
                         <div className="text-center text-xs text-gray-400 dark:text-gray-500">

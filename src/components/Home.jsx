@@ -18,6 +18,7 @@ const Home = () => {
     const [showMenuFAB, setShowMenuFAB] = useState(false);
     const [showModalEntradaRapida, setShowModalEntradaRapida] = useState(false);
     const [showModalCargarPDF, setShowModalCargarPDF] = useState(false);
+    const [transaccionesCompartidasPeriodo, setTransaccionesCompartidasPeriodo] = useState([]);
 
     // Cargar datos cuando cambian los meses seleccionados
     const skipNextLoadRef = useRef(false);
@@ -78,6 +79,42 @@ const Home = () => {
         setShowToast({ message, type });
         setTimeout(() => setShowToast(null), 3000);
     };
+
+    // Cargar transacciones compartidas de TODO el período cuando solo hay un mes seleccionado
+    useEffect(() => {
+        const cargarTransaccionesCompartidasDelPeriodo = async () => {
+            if (selectedMonths.length !== 1 || !selectedMonths[0]) {
+                setTransaccionesCompartidasPeriodo([]);
+                return;
+            }
+
+            const mesAnio = selectedMonths[0].mesAnio; // ej: "2025-10"
+
+            // Buscar TODOS los meses del mismo período (2025-10) de todos los perfiles
+            const todosLosMesesDelPeriodo = mesesCargados.filter(m => m.mesAnio === mesAnio);
+
+            if (todosLosMesesDelPeriodo.length <= 1) {
+                // Solo hay un mes de este período, no hay compartidos de otros perfiles
+                setTransaccionesCompartidasPeriodo([]);
+                return;
+            }
+
+            console.log(`💑 Buscando gastos compartidos en ${todosLosMesesDelPeriodo.length} meses de ${mesAnio}`);
+
+            // Cargar transacciones compartidas de TODOS los meses del período
+            const transaccionesDelPeriodo = [];
+            for (const mes of todosLosMesesDelPeriodo) {
+                const trans = await window.getTransaccionesByMes(mes.id);
+                const compartidas = trans.filter(t => t.esCompartido);
+                transaccionesDelPeriodo.push(...compartidas);
+            }
+
+            console.log(`💑 Total gastos compartidos en ${mesAnio}: ${transaccionesDelPeriodo.length}`);
+            setTransaccionesCompartidasPeriodo(transaccionesDelPeriodo);
+        };
+
+        cargarTransaccionesCompartidasDelPeriodo();
+    }, [selectedMonths, mesesCargados]);
 
     // Función para toggle de selección de mes
     const toggleMesSeleccionado = (mes) => {
@@ -187,10 +224,15 @@ const Home = () => {
     }, [cuotasActivas, selectedMonth]);
 
     // Calcular balance simple para mostrar en stats
+    // MEJORADO: Usa transaccionesCompartidasPeriodo cuando solo hay un mes seleccionado
     const balance = useMemo(() => {
-        if (transacciones.length === 0 || perfiles.length < 2) return null;
+        if (perfiles.length < 2) return null;
 
-        const gastosCompartidos = transacciones.filter(t => t.esCompartido);
+        // Si solo hay un mes seleccionado, usar transacciones de TODO el período
+        const gastosCompartidos = selectedMonths.length === 1 && transaccionesCompartidasPeriodo.length > 0
+            ? transaccionesCompartidasPeriodo
+            : transacciones.filter(t => t.esCompartido);
+
         if (gastosCompartidos.length === 0) return null;
 
         const balancePorPerfil = {};
@@ -225,7 +267,7 @@ const Home = () => {
         }
 
         return { deudor, acreedor, montoNeto };
-    }, [transacciones, perfiles]);
+    }, [transacciones, perfiles, selectedMonths, transaccionesCompartidasPeriodo]);
 
     // Filtrar transacciones según tab y filtros
     const transaccionesFiltradas = useMemo(() => {
@@ -564,7 +606,15 @@ const Home = () => {
             )}
 
             <CollapsibleSection title="Balance de Gastos Compartidos" icon="💑" defaultOpen={false}>
-                <BalanceCompartido transacciones={transacciones} perfiles={perfiles} />
+                <BalanceCompartido
+                    transacciones={selectedMonths.length === 1 && transaccionesCompartidasPeriodo.length > 0
+                        ? transaccionesCompartidasPeriodo
+                        : transacciones
+                    }
+                    perfiles={perfiles}
+                    esPeriodoCompleto={selectedMonths.length === 1 && transaccionesCompartidasPeriodo.length > 0}
+                    mesAnio={selectedMonths.length === 1 ? selectedMonths[0].mesAnio : null}
+                />
             </CollapsibleSection>
 
             <CollapsibleSection title="Distribución por Categorías" icon="📊" defaultOpen={false}>
@@ -1126,7 +1176,7 @@ const ListaTransacciones = memo(({ transacciones, perfiles, categorias, onEditar
 });
 
 // Componente Balance Compartido (US-009)
-const BalanceCompartido = memo(({ transacciones, perfiles }) => {
+const BalanceCompartido = memo(({ transacciones, perfiles, esPeriodoCompleto = false, mesAnio = null }) => {
     // Si no hay transacciones compartidas, no mostrar
     const tieneCompartidos = transacciones.some(t => t.esCompartido);
     if (!tieneCompartidos || perfiles.length < 2) return null;
@@ -1145,6 +1195,23 @@ const BalanceCompartido = memo(({ transacciones, perfiles }) => {
     return (
         <Card title="Balance de Gastos Compartidos" icon="💑">
             <div className="space-y-4">
+                {/* Indicador de período completo */}
+                {esPeriodoCompleto && mesAnio && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
+                        <div className="flex items-start space-x-2">
+                            <span className="text-blue-600 dark:text-blue-400 text-lg">ℹ️</span>
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-blue-900 dark:text-blue-300">
+                                    Balance de período completo
+                                </p>
+                                <p className="text-xs text-blue-700 dark:text-blue-400 mt-1">
+                                    Se están considerando los gastos compartidos de TODOS los perfiles del período {getNombreMes(mesAnio)}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Resumen de transacciones compartidas */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="bg-indigo-50 rounded-lg p-4">
