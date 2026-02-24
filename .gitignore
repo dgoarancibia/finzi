@@ -1,0 +1,8 @@
+# Archivo de desarrollo local (no subir a GitHub)
+index-dev.html
+
+# Node
+node_modules/
+
+# OS
+.DS_Store

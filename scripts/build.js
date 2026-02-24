@@ -1,23 +1,38 @@
 #!/usr/bin/env node
 
 /**
- * Script de Build para Analizador de Gastos TC v3.2
+ * Script de Build para Finzi - Analizador de Gastos v3.5.0
  * Combina todos los archivos modulares en un único index.html
+ *
+ * Uso:
+ *   node scripts/build.js        → build PROD (index.html)
+ *   node scripts/build.js dev    → build DEV  (index-dev.html)
  */
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
+
+// Detectar ambiente desde argumento CLI
+const APP_ENV = process.argv[2] === 'dev' ? 'dev' : 'prod';
+const IS_DEV = APP_ENV === 'dev';
 
 // Rutas
 const ROOT = path.join(__dirname, '..');
 const SRC = path.join(ROOT, 'src');
-const OUTPUT = path.join(ROOT, 'index.html');
+const OUTPUT = IS_DEV ? path.join(ROOT, 'index-dev.html') : path.join(ROOT, 'index.html');
 
-console.log('🚀 Iniciando build de Analizador de Gastos TC v3.2...\n');
+const VERSION = 'v3.5.0';
+
+console.log(`\n🚀 Build de Finzi ${VERSION} — Ambiente: ${APP_ENV.toUpperCase()}`);
+console.log(`📁 Output: ${path.basename(OUTPUT)}\n`);
 
 // Leer template HTML base
-console.log('📄 Leyendo template base...');
 let html = fs.readFileSync(path.join(SRC, 'app.html'), 'utf8');
+
+// Inyectar flag de ambiente ANTES que firebase-config.js lo lea
+const envScript = `<script>window.APP_ENV = '${APP_ENV}';</script>`;
+html = html.replace('<head>', `<head>\n    ${envScript}`);
 
 // Archivos a inyectar en orden
 const archivos = [
@@ -66,7 +81,8 @@ const archivos = [
     { path: 'components/TourGuide.jsx', marker: '/* INJECT:components/TourGuide.jsx */' },
     { path: 'components/EntradaRapida.jsx', marker: '/* INJECT:components/EntradaRapida.jsx */' },
     { path: 'components/Reconciliacion.jsx', marker: '/* INJECT:components/Reconciliacion.jsx */' },
-    { path: 'components/ModalCargarPDF.jsx', marker: '/* INJECT:components/ModalCargarPDF.jsx */' }
+    { path: 'components/ModalCargarPDF.jsx', marker: '/* INJECT:components/ModalCargarPDF.jsx */' },
+    { path: 'components/Diagnostico.jsx', marker: '/* INJECT:components/Diagnostico.jsx */' }
 ];
 
 // Inyectar archivos
@@ -82,12 +98,15 @@ for (const archivo of archivos) {
             continue;
         }
 
-        const contenido = fs.readFileSync(filePath, 'utf8');
+        let contenido = fs.readFileSync(filePath, 'utf8');
 
         if (!html.includes(archivo.marker)) {
             console.warn(`⚠️  Marker no encontrado para: ${archivo.path}`);
             continue;
         }
+
+        // Escapar $ para evitar que replace() lo interprete como patrón especial
+        contenido = contenido.replace(/\$/g, '$$$$');
 
         html = html.replace(archivo.marker, contenido);
         archivosProcesados++;
@@ -100,13 +119,17 @@ for (const archivo of archivos) {
 console.log(`\n📊 Archivos procesados: ${archivosProcesados}/${archivos.length}`);
 
 // Escribir archivo final
-console.log(`\n💾 Escribiendo ${OUTPUT}...`);
 fs.writeFileSync(OUTPUT, html);
 
-// Obtener tamaño del archivo
 const stats = fs.statSync(OUTPUT);
 const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
 
-console.log(`\n✨ Build completado exitosamente!`);
-console.log(`📦 Archivo generado: index.html (${sizeMB} MB)`);
-console.log(`\n🎉 ¡Listo para usar! Abre index.html en tu navegador.`);
+console.log(`\n✨ Build completado — ${path.basename(OUTPUT)} (${sizeMB} MB)`);
+
+// Si es DEV, levantar servidor local
+if (IS_DEV) {
+    const PORT = 8080;
+    console.log(`\n🌐 Iniciando servidor local en http://localhost:${PORT}/index-dev.html`);
+    console.log('   (Ctrl+C para detener)\n');
+    execSync(`npx serve . -p ${PORT} --no-clipboard`, { stdio: 'inherit', cwd: ROOT });
+}

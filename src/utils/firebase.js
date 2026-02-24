@@ -188,15 +188,16 @@ window.waitForAuth = function() {
 
 /**
  * Helper: obtener referencia a colección de usuario
+ * En DEV usa "gastos-dev/{userId}/..." para no tocar datos de producción
  */
 window.getUserCollection = function(collectionName) {
     if (!window.currentUser) {
         throw new Error('Usuario no autenticado');
     }
 
-    // Estructura: gastos/{userId}/{collectionName}
+    const root = window.FIREBASE_COLLECTION_ROOT || 'gastos';
     return window.firestore
-        .collection('gastos')
+        .collection(root)
         .doc(window.currentUser.uid)
         .collection(collectionName);
 };
@@ -209,8 +210,9 @@ window.getUserDoc = function() {
         throw new Error('Usuario no autenticado');
     }
 
+    const root = window.FIREBASE_COLLECTION_ROOT || 'gastos';
     return window.firestore
-        .collection('users')
+        .collection(`${root}-users`)
         .doc(window.currentUser.uid);
 };
 

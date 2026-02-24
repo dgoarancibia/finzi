@@ -1,16 +1,14 @@
 /**
  * Configuración de Firebase para Finzi v3.3
  *
- * INSTRUCCIONES:
- * 1. Ve a Firebase Console: https://console.firebase.google.com/
- * 2. Selecciona tu proyecto
- * 3. Ve a Configuración del proyecto (ícono engranaje)
- * 4. Scroll down hasta "Tus apps" → selecciona la app web
- * 5. Copia el objeto firebaseConfig
- * 6. Reemplaza los valores abajo con los tuyos
+ * AMBIENTES:
+ * - DEV:  datos en colección "gastos-dev" (datos de prueba, no afecta producción)
+ * - PROD: datos en colección "gastos"     (datos reales de Diego y Marcela)
+ *
+ * El ambiente se define en build.js via window.APP_ENV = 'dev' | 'prod'
  */
 
-// ⚠️ CONFIGURACIÓN REAL - Tus credenciales de Firebase
+// Firebase credentials (mismo proyecto para dev y prod)
 window.FIREBASE_CONFIG = {
     apiKey: "AIzaSyBFzZleam4NK9XqQQ8rYS4Sb8Nhxa9xhFo",
     authDomain: "finzi-bbdbc.firebaseapp.com",
@@ -20,27 +18,30 @@ window.FIREBASE_CONFIG = {
     appId: "1:1068955823447:web:16968a73375fbf027fa212"
 };
 
-// ⚠️ USUARIOS AUTORIZADOS - Agrega los emails que pueden acceder
+// ⚠️ USUARIOS AUTORIZADOS
 window.AUTHORIZED_EMAILS = [
-    "diegoarancibiamaturana@gmail.com",        // ← CAMBIAR por tu email
-    "marcelaayestas@gmail.com"     // ← CAMBIAR por email de tu esposa
+    "diegoarancibiamaturana@gmail.com",
+    "marcelaayestas@gmail.com"
 ];
 
 // Flag para habilitar/deshabilitar Firebase
-// true = usar Firebase (sincronización en la nube)
-// false = usar IndexedDB local (como antes)
 window.USE_FIREBASE = true;
+
+// Ambiente: 'dev' o 'prod' — inyectado por build.js como window.APP_ENV
+// En dev: los datos van a "gastos-dev/{userId}/..." (aislado de producción)
+// En prod: los datos van a "gastos/{userId}/..."
+// Fallback seguro: si no fue inyectado, usar prod
+window.APP_ENV = window.APP_ENV || 'prod';
+
+window.FIREBASE_COLLECTION_ROOT = window.APP_ENV === 'dev' ? 'gastos-dev' : 'gastos';
+
+console.log(`🌍 Ambiente: ${window.APP_ENV.toUpperCase()} | Colección root: ${window.FIREBASE_COLLECTION_ROOT}`);
 
 /**
  * Configuración de Firestore
  */
 window.FIRESTORE_SETTINGS = {
-    // Habilitar persistencia offline
     enablePersistence: true,
-
-    // Sincronización en tiempo real
     realtime: true,
-
-    // Logs de debug (solo desarrollo)
-    debug: false
+    debug: window.APP_ENV === 'dev'
 };
